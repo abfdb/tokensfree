@@ -2,12 +2,15 @@
 import json, time, uuid, threading, secrets, argparse, hashlib, hmac, re, copy
 from collections import OrderedDict
 from pathlib import Path
+from providers import ProviderSpec, MockAdapter, evaluate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SCENARIOS = {'fallback': ['exhausted', 'success'], 'success': ['success', 'success'],
              'exhausted': ['exhausted', 'exhausted'], 'rate_limit': ['limited', 'success'],
              'auth_error': ['auth', 'success'], 'refusal': ['refusal', 'success'],
-             'outage': ['unavailable', 'success']}
+             'outage': ['unavailable', 'success'],
+             'unknown_cost': ['success', 'success'], 'all_unknown_cost': ['success', 'success'],
+             'expired_evidence': ['success', 'success']}
 
 class Gateway:
     def __init__(self):
@@ -62,12 +65,22 @@ class Gateway:
         for m in messages:
             if not isinstance(m, dict) or m.get('role') not in ('system','user','assistant') or not isinstance(m.get('content'), str): raise ValueError('text messages only')
             if len(m['content']) > 4000: raise ValueError('message too long')
+        authorized = payload.get('allowed_providers', ['mock-alpha', 'mock-beta'])
+        if not isinstance(authorized, list) or not authorized or any(not isinstance(x, str) or x not in ('mock-alpha', 'mock-beta') for x in authorized):
+            raise ValueError('allowed_providers must be a nonempty subset of mock providers')
         with self.lock:
             request_id = 'mock-' + uuid.uuid4().hex[:12]
             trace = []
             for i, result in enumerate(SCENARIOS[self.scenario]):
                 name = ['mock-alpha', 'mock-beta'][i]
-                if self.cooldowns.get(name, 0) > time.time(): result = 'cooldown'
+                spec = self.provider_spec(name, i)
+                decision = evaluate(spec, frozenset(authorized), time.time())
+                if not decision.allowed:
+                    result = 'policy:' + decision.reason
+                elif self.cooldowns.get(name, 0) > time.time():
+                    result = 'cooldown'
+                else:
+                    result = MockAdapter(result).complete(messages).value
                 event = {'time': time.strftime('%H:%M:%S'), 'request_id': request_id, 'provider': name, 'result': result}
                 self.events.append(event); self.events = self.events[-100:]; trace.append(event)
                 if result == 'success':
@@ -80,9 +93,21 @@ class Gateway:
                 if result == 'refusal':
                     return 422, {'error':{'code':'mock_safety_refusal','message':'模拟安全拒绝：停止，不通过切换规避。'},'trace':trace}
             return 503, {'error':{'code':'no_free_provider','message':'没有可用的模拟免费供应商。已停止，不回退付费。'},'trace':trace}
+    def provider_spec(self, name, index):
+        # Synthetic expiring evidence for policy tests, not platform verification.
+        unknown = self.scenario == 'all_unknown_cost' or (self.scenario == 'unknown_cost' and index == 0)
+        expired = self.scenario == 'expired_evidence' and index == 0
+        return ProviderSpec(name, name, cost_evidence='unknown' if unknown else 'mock_zero_cost',
+                            evidence_expires_at=time.time() - 1 if expired else time.time() + 60)
+
     def snapshot(self):
         with self.lock:
-            return {'simulation':True,'scenario':self.scenario,'events':list(self.events),'scenarios':list(SCENARIOS), 'providers':[{'name':name,'state':'cooldown' if self.cooldowns.get(name,0)>time.time() else 'eligible','quota':'模拟；不是实际余额'} for name in ('mock-alpha','mock-beta')]}
+            providers = []
+            for index, name in enumerate(('mock-alpha', 'mock-beta')):
+                decision = evaluate(self.provider_spec(name, index), frozenset({'mock-alpha','mock-beta'}), time.time())
+                state = 'blocked' if not decision.allowed else ('cooldown' if self.cooldowns.get(name,0)>time.time() else 'eligible')
+                providers.append({'name':name, 'state':state, 'policy_reason':decision.reason, 'quota':'模拟；不是实际余额'})
+            return {'simulation':True,'scenario':self.scenario,'events':list(self.events),'scenarios':list(SCENARIOS),'providers':providers}
 
 ROOT = Path(__file__).parent/'static'
 class Handler(BaseHTTPRequestHandler):
