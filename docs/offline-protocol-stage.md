@@ -38,4 +38,4 @@ result = client.complete('test', request_key='my-task-001')
 
 协议字段参考：[官方 Chat Completions 参考](https://developers.openai.com/api/reference/resources/chat)。仅借鉴文本非流式子集；`max_tokens` 并非所有型号都支持，未来需供应商专属映射。
 
-本阶段测试覆盖本地 HTTP 往返、重定向阻断、字节上限、错误正文脱敏、安全拒绝、权限收缩和客户端重复键保护。协议 fixture 有调用截止定时器；最小客户端的 timeout 仍是 socket 等待时间，不能作为恶意本地服务下的完整请求总期限。请只连接自己启动的本地服务，不发送敏感数据到 fixture。
+本阶段测试覆盖本地 HTTP 往返、重定向阻断、字节上限、错误正文脱敏、安全拒绝、权限收缩和客户端重复键保护。协议 fixture 有调用截止定时器；最小客户端后续也增加了每次 HTTP 交易的截止定时器，详见 [客户端安全说明](local-client-safety.md)。请只连接自己启动的本地服务，不发送敏感数据到 fixture。

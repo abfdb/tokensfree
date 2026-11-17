@@ -101,3 +101,6 @@ API 可选 `allowed_providers`，只能缩小到已配置的 mock-alpha / mock-b
 
 ## 本地网关合成 Agent 模式
 `python server.py --agent-fixture` 可在现有端点启用 `tokensfree-fixture` 合成 SSE/read 工具模型。默认启动及 UI 不变；这不是实际模型或免费 API 路由。一次进程只提供一次受限实验会话，普通场景重置不会重新派发工具。详见 [启动与安全边界](docs/gateway-agent-mode.md)。
+
+## 本地客户端传输加固
+本地 Python 客户端增加每次 HTTP 交易的完整期限、严格响应格式与会话令牌检查。错误正文不回显，仍不自动重试。使用及限制见 [客户端安全说明](docs/local-client-safety.md)。

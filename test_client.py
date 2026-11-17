@@ -60,7 +60,7 @@ class ClientTest(unittest.TestCase):
         def request(method, path, body=None, headers=None):
             if method == 'GET':
                 self.client.last_request_key = 'concurrent-other-key'
-                return {'token':'fixture'}
+                return {'token':'fixture_'*5}
             calls.append(headers['Idempotency-Key'])
             return {}
         with patch.object(self.client, '_request', side_effect=request):
