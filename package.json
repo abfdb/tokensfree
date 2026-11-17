@@ -1,1 +1,9 @@
-{"name":"tokensfree","version":"0.3.0","private":true,"scripts":{"dev":"python server.py --port 4173","test":"python -m unittest -v"}}
+{
+  "name": "tokensfree",
+  "version": "0.4.0",
+  "private": true,
+  "scripts": {
+    "dev": "python server.py --port 4173",
+    "test": "python -m unittest -v"
+  }
+}

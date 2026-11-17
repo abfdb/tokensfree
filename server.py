@@ -13,7 +13,11 @@ SCENARIOS = {'fallback': ['exhausted', 'success'], 'success': ['success', 'succe
              'expired_evidence': ['success', 'success']}
 
 class Gateway:
-    def __init__(self):
+    def __init__(self, authorized_providers=None):
+        # Trusted constructor configuration, not client-supplied authorization.
+        self.authorized_providers = frozenset(('mock-alpha', 'mock-beta') if authorized_providers is None else authorized_providers)
+        if not self.authorized_providers.issubset({'mock-alpha', 'mock-beta'}):
+            raise ValueError('unknown server provider')
         self.lock = threading.RLock()
         self.cache = OrderedDict()
         self.fingerprint_secret = secrets.token_bytes(32)
@@ -74,7 +78,7 @@ class Gateway:
             for i, result in enumerate(SCENARIOS[self.scenario]):
                 name = ['mock-alpha', 'mock-beta'][i]
                 spec = self.provider_spec(name, i)
-                decision = evaluate(spec, frozenset(authorized), time.time())
+                decision = evaluate(spec, frozenset(authorized) & self.authorized_providers, time.time())
                 if not decision.allowed:
                     result = 'policy:' + decision.reason
                 elif self.cooldowns.get(name, 0) > time.time():
@@ -104,7 +108,7 @@ class Gateway:
         with self.lock:
             providers = []
             for index, name in enumerate(('mock-alpha', 'mock-beta')):
-                decision = evaluate(self.provider_spec(name, index), frozenset({'mock-alpha','mock-beta'}), time.time())
+                decision = evaluate(self.provider_spec(name, index), self.authorized_providers, time.time())
                 state = 'blocked' if not decision.allowed else ('cooldown' if self.cooldowns.get(name,0)>time.time() else 'eligible')
                 providers.append({'name':name, 'state':state, 'policy_reason':decision.reason, 'quota':'模拟；不是实际余额'})
             return {'simulation':True,'scenario':self.scenario,'events':list(self.events),'scenarios':list(SCENARIOS),'providers':providers}
