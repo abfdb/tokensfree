@@ -1,5 +1,6 @@
 """tokensfree: local, mock-only gateway. No outbound provider connections."""
-import json, time, uuid, threading, secrets, argparse
+import json, time, uuid, threading, secrets, argparse, hashlib, hmac, re, copy
+from collections import OrderedDict
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -10,7 +11,9 @@ SCENARIOS = {'fallback': ['exhausted', 'success'], 'success': ['success', 'succe
 
 class Gateway:
     def __init__(self):
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
+        self.cache = OrderedDict()
+        self.fingerprint_secret = secrets.token_bytes(32)
         self.events = []
         self.scenario = 'fallback'
         self.cooldowns = {}
@@ -20,6 +23,35 @@ class Gateway:
             self.scenario = scenario
             self.cooldowns = {}
             self.events = []
+    def dispatch(self, payload, idempotency_key=None):
+        """Retry protection, not durable exactly-once execution.
+
+        Cache responses (including failures) for five minutes, bounded to 100 keys.
+        Store an HMAC rather than plaintext prompts. Scenario reset intentionally
+        does not forget keys: an uncertain retry must not become a new operation.
+        """
+        if idempotency_key is None:
+            return self.run(payload)
+        if not isinstance(idempotency_key, str) or not re.fullmatch(r'[A-Za-z0-9._:-]{1,128}', idempotency_key):
+            raise ValueError('invalid idempotency key')
+        serialized = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()
+        fingerprint = hmac.new(self.fingerprint_secret, serialized, hashlib.sha256).digest()
+        with self.lock:
+            now = time.monotonic()
+            expired = [key for key, entry in self.cache.items() if entry[0] <= now]
+            for key in expired:
+                del self.cache[key]
+            if idempotency_key in self.cache:
+                _, original, response = self.cache[idempotency_key]
+                if not hmac.compare_digest(original, fingerprint):
+                    return 409, {'error': {'code': 'idempotency_conflict', 'message': '同一请求键不能用于不同内容。请为新请求生成新键。'}}
+                return copy.deepcopy(response)
+            if len(self.cache) >= 100:
+                return 503, {'error': {'code': 'idempotency_capacity', 'message': '去重缓存已满，请等待旧记录到期。请求未执行。'}}
+            response = self.run(payload)
+            self.cache[idempotency_key] = (time.monotonic() + 300, fingerprint, copy.deepcopy(response))
+            return response
+
     def run(self, payload):
         if not isinstance(payload, dict): raise ValueError('request must be an object')
         if payload.get('model') != 'tokensfree-auto': raise ValueError('only tokensfree-auto is available')
@@ -86,7 +118,7 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == '/api/scenario':
                 self.server.gateway.reset(payload.get('scenario')); return self.send(200,self.server.gateway.snapshot())
             if self.path == '/v1/chat/completions':
-                status,data=self.server.gateway.run(payload); return self.send(status,data)
+                status,data=self.server.gateway.dispatch(payload, self.headers.get('Idempotency-Key')); return self.send(status,data)
             return self.send(404,{'error':'not found'})
         except (ValueError, TypeError, AttributeError, TimeoutError): return self.send(400,{'error':'Invalid request or unsupported capability'})
 
