@@ -1,4 +1,4 @@
-# tokensfree 0.5 · 本地路由实验台
+# tokensfree 0.6 · 本地路由实验台
 
 **这是 mock-only 开发原型，不是真实免费 API 网关。没有外部模型请求，不需要任何账号或密钥。未公开发布。**
 
@@ -89,3 +89,6 @@ API 可选 `allowed_providers`，只能缩小到已配置的 mock-alpha / mock-b
 
 ## 0.5：供应商配置预检
 新增 Gemini Developer API 离线配置声明预检。`python preflight.py examples/gemini-preflight.json` 输出明确阻塞项；永远不启用真实调用，不读取账号或密钥。输入声明全部满足也不能证明免费资格。详见 [预检说明与正式接入门槛](docs/gemini-preflight.md)。
+
+## 0.6：凭据隔离契约
+新增默认拒绝的凭据 broker 与固定合成值测试后端，验证服务器侧供应商/端点/模型/时效绑定；不收集真实密钥。Windows 与跨平台系统库方案及安全边界见 [凭据边界](docs/credential-boundary.md)。系统库尚未接入、真实调用继续关闭。
