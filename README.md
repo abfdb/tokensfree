@@ -92,3 +92,6 @@ API 可选 `allowed_providers`，只能缩小到已配置的 mock-alpha / mock-b
 
 ## 0.6：凭据隔离契约
 新增默认拒绝的凭据 broker 与固定合成值测试后端，验证服务器侧供应商/端点/模型/时效绑定；不收集真实密钥。Windows 与跨平台系统库方案及安全边界见 [凭据边界](docs/credential-boundary.md)。系统库尚未接入、真实调用继续关闭。
+
+## DSH 接入审计
+`python check_dsh_contract.py` 可重复运行 8 项本地 HTTP 协议边界探测。当前不是 DSH 完整后端：SSE、工具循环与其他三类 API 尚未实现。参见 [差距与实验报告](docs/dsh-integration-gap.md)。该探测本身不启动 DSH，不读取用户配置或调用真实供应商。
