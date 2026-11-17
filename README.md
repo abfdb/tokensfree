@@ -95,3 +95,6 @@ API 可选 `allowed_providers`，只能缩小到已配置的 mock-alpha / mock-b
 
 ## DSH 接入审计
 `python check_dsh_contract.py` 可重复运行 8 项本地 HTTP 协议边界探测。当前不是 DSH 完整后端：SSE、工具循环与其他三类 API 尚未实现。参见 [差距与实验报告](docs/dsh-integration-gap.md)。该探测本身不启动 DSH，不读取用户配置或调用真实供应商。
+
+## DSH 实验性 SSE + 工具闭环
+新增独立 `agent_fixture.py` 合成模型端点与 `experiments/dsh_tool_roundtrip.py`。固定官方 DSH 已在无外网实验中完成一次 `read` 工具调用、结果回传和最终回复。默认网关不变，尚不支持真实供应商的流式/工具路由，不能用于实际开发任务。复现、安全边界与验收见 [实验说明](docs/dsh-sse-stage.md)。
