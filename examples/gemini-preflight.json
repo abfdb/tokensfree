@@ -1,0 +1,13 @@
+{
+  "provider": "google-gemini-developer",
+  "endpoint": "https://generativelanguage.googleapis.com",
+  "model": "gemini-example",
+  "credential_store": "unconfigured",
+  "billing_tier": "unknown",
+  "paid_fallback": false,
+  "region_supported": false,
+  "data_terms_accepted": false,
+  "free_model_verified": false,
+  "hard_stop_verified": false,
+  "checked_at": 0
+}

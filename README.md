@@ -1,4 +1,4 @@
-# tokensfree 0.4 · 本地路由实验台
+# tokensfree 0.5 · 本地路由实验台
 
 **这是 mock-only 开发原型，不是真实免费 API 网关。没有外部模型请求，不需要任何账号或密钥。未公开发布。**
 
@@ -86,3 +86,6 @@ API 可选 `allowed_providers`，只能缩小到已配置的 mock-alpha / mock-b
 新增最小本地 Python 客户端、服务端授权上限与离线 HTTP 协议验证。`python client.py` 可连接已启动的本地模拟网关；不自动重试，不调用真实平台。阶段能力、使用示例和真实接入门槛见 [阶段验收](docs/offline-protocol-stage.md)。
 
 本阶段本地测试：66 项通过；协议 fixture 与客户端均有 loopback HTTP 测试，JS 语法检查通过。独立审查发现的无效请求键、超时后重试键可恢复性及并发键覆盖已修复并回归测试。
+
+## 0.5：供应商配置预检
+新增 Gemini Developer API 离线配置声明预检。`python preflight.py examples/gemini-preflight.json` 输出明确阻塞项；永远不启用真实调用，不读取账号或密钥。输入声明全部满足也不能证明免费资格。详见 [预检说明与正式接入门槛](docs/gemini-preflight.md)。
