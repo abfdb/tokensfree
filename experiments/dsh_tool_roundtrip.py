@@ -18,11 +18,11 @@ def main():
     sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     fcntl.ioctl(sock,0x8914,struct.pack('16sh',b'lo',0x49));sock.close()
     sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]))
-    from agent_fixture import make_fixture,SENTINEL,CALL_ID
+    from agent_fixture import CALL_ID
+    from server import make_server
     with tempfile.TemporaryDirectory(prefix='tokensfree-dsh-tool-') as root:
         root=pathlib.Path(root);home=root/'home';home.mkdir();work=root/'workspace';work.mkdir()
-        target=work/'fixture.txt';target.write_text(SENTINEL+'\n')
-        srv=make_fixture(target);thread=threading.Thread(target=srv.serve_forever,daemon=True);thread.start()
+        srv=make_server(0, enable_agent_fixture=True);thread=threading.Thread(target=srv.serve_forever,daemon=True);thread.start()
         try:
             patch=root/'patch.yml'
             patch.write_text(f'''- id: agent-default-model
@@ -48,7 +48,7 @@ def main():
 ''')
             env={'HOME':str(home),'DSH_HOME':str(home),'PATH':str(pathlib.Path(sys.argv[3]).parent)+':/usr/bin:/bin','TOKENSFREE_LOCAL_TOKEN':srv.token}
             try:
-                result=subprocess.run([sys.argv[3],sys.argv[2],'--profile','headless','--patch',str(patch),'--json','Read fixture.txt using the read tool, then confirm completion. Do not use shell or any other tool.'],cwd=work,env=env,capture_output=True,text=True,timeout=40)
+                result=subprocess.run([sys.argv[3],sys.argv[2],'--profile','headless','--patch',str(patch),'--json','Read the provided fixture using the read tool, then confirm completion. Do not use shell or any other tool.'],cwd=work,env=env,capture_output=True,text=True,timeout=40)
                 events=[]
                 for line in result.stdout.splitlines():
                     try: events.append(json.loads(line))

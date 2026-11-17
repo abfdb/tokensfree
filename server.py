@@ -1,8 +1,9 @@
 """tokensfree: local, mock-only gateway. No outbound provider connections."""
-import json, time, uuid, threading, secrets, argparse, hashlib, hmac, re, copy
+import json, time, uuid, threading, secrets, argparse, hashlib, hmac, re, copy, tempfile
 from collections import OrderedDict
 from pathlib import Path
 from providers import ProviderSpec, MockAdapter, evaluate
+from agent_fixture import Roundtrip, SENTINEL, sse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SCENARIOS = {'fallback': ['exhausted', 'success'], 'success': ['success', 'success'],
@@ -121,7 +122,15 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code); self.send_header('Content-Type',mime); self.send_header('Content-Length',str(len(raw)))
         self.send_header('Cache-Control','no-store'); self.send_header('X-Content-Type-Options','nosniff')
         self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'")
-        self.end_headers(); self.wfile.write(raw)
+        self.end_headers()
+        try:
+            if mime == 'text/event-stream':
+                for frame in raw.split(b'\n\n'):
+                    if frame:
+                        self.wfile.write(frame+b'\n\n'); self.wfile.flush()
+            else: self.wfile.write(raw)
+        except (BrokenPipeError, ConnectionResetError, TimeoutError):
+            self.close_connection = True
     def allowed(self):
         hosts = {f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}'}
         return self.headers.get('Host') in hosts and (not self.headers.get('Origin') or self.headers['Origin'] in {'http://'+x for x in hosts})
@@ -129,7 +138,11 @@ class Handler(BaseHTTPRequestHandler):
         if not self.allowed(): return self.send(403,{'error':'Host or Origin rejected'})
         if self.path == '/api/session': return self.send(200,{'token':self.server.token})
         if self.path == '/api/status': return self.send(200,self.server.gateway.snapshot())
-        if self.path == '/v1/models': return self.send(200,{'object':'list','data':[{'id':'tokensfree-auto','object':'model','owned_by':'mock-only'}]})
+        if self.path == '/v1/models':
+            models=[{'id':'tokensfree-auto','object':'model','owned_by':'mock-only'}]
+            if self.server.roundtrip is not None:
+                models.append({'id':'tokensfree-fixture','object':'model','owned_by':'synthetic-single-read-only'})
+            return self.send(200,{'object':'list','data':models})
         paths={'/':'index.html','/app.js':'app.js','/style.css':'style.css','/catalog/':'catalog/index.html','/catalog/app.js':'catalog/app.js','/catalog/data.js':'catalog/data.js','/catalog/style.css':'catalog/style.css'}
         file=paths.get(self.path)
         if not file: return self.send(404,{'error':'not found'})
@@ -137,27 +150,57 @@ class Handler(BaseHTTPRequestHandler):
         self.send(200,(ROOT/file).read_bytes(),mime)
     def do_POST(self):
         if not self.allowed(): return self.send(403,{'error':'Host or Origin rejected'})
-        token = self.headers.get('Authorization','').removeprefix('Bearer ')
-        if not secrets.compare_digest(token,self.server.token): return self.send(401,{'error':'local session token required'})
+        token = self.headers.get('Authorization','').encode('utf-8')
+        if not secrets.compare_digest(token,('Bearer '+self.server.token).encode('utf-8')): return self.send(401,{'error':'local session token required'})
         try:
+            if self.headers.get('Transfer-Encoding') is not None or len(self.headers.get_all('Content-Length',[])) != 1:
+                raise ValueError('ambiguous framing')
             n=int(self.headers.get('Content-Length','0'))
-            if n<1 or n>65536: return self.send(413,{'error':'body size must be 1–65536 bytes'})
+            maximum=262144 if self.server.roundtrip is not None else 65536
+            if n<1 or n>maximum: return self.send(413,{'error':'body size outside configured limit'})
             self.connection.settimeout(5)
             payload=json.loads(self.rfile.read(n))
             if self.path == '/api/scenario':
                 self.server.gateway.reset(payload.get('scenario')); return self.send(200,self.server.gateway.snapshot())
             if self.path == '/v1/chat/completions':
+                if isinstance(payload,dict) and payload.get('model') == 'tokensfree-fixture':
+                    if self.server.roundtrip is None:
+                        return self.send(400,{'error':'agent fixture is not enabled'})
+                    # Single-use state commits before SSE output. Never use text
+                    # idempotency cache to replay an emitted tool instruction.
+                    events=self.server.roundtrip.accept(payload)
+                    return self.send(200,sse(events),'text/event-stream')
                 status,data=self.server.gateway.dispatch(payload, self.headers.get('Idempotency-Key')); return self.send(status,data)
             return self.send(404,{'error':'not found'})
-        except (ValueError, TypeError, AttributeError, TimeoutError): return self.send(400,{'error':'Invalid request or unsupported capability'})
+        except (ValueError, TypeError, AttributeError, TimeoutError, RecursionError): return self.send(400,{'error':'Invalid request or unsupported capability'})
 
-def make_server(port=8765):
-    srv=ThreadingHTTPServer(('127.0.0.1',port),Handler)
+class LocalServer(ThreadingHTTPServer):
+    fixture_directory = None
+    roundtrip = None
+    fixture_path = None
+    def server_close(self):
+        try: super().server_close()
+        finally:
+            if self.fixture_directory is not None:
+                self.fixture_directory.cleanup()
+                self.fixture_directory = None
+
+def make_server(port=8765, *, enable_agent_fixture=False):
+    if type(enable_agent_fixture) is not bool: raise ValueError('invalid fixture flag')
+    srv=LocalServer(('127.0.0.1',port),Handler)
     srv.gateway=Gateway(); srv.token=secrets.token_urlsafe(32)
+    if enable_agent_fixture:
+        try:
+            srv.fixture_directory=tempfile.TemporaryDirectory(prefix='tokensfree-public-fixture-')
+            srv.fixture_path=Path(srv.fixture_directory.name)/'fixture.txt'
+            srv.fixture_path.write_text(SENTINEL+'\n')
+            srv.roundtrip=Roundtrip(str(srv.fixture_path))
+        except Exception:
+            srv.server_close(); raise
     return srv
 if __name__=='__main__':
-    parser=argparse.ArgumentParser(); parser.add_argument('--port',type=int,default=8765); parser.add_argument('--host',choices=['127.0.0.1'],default='127.0.0.1'); parser.add_argument('--strictPort',action='store_true'); args=parser.parse_args()
-    server=make_server(args.port)
+    parser=argparse.ArgumentParser(); parser.add_argument('--port',type=int,default=8765); parser.add_argument('--host',choices=['127.0.0.1'],default='127.0.0.1'); parser.add_argument('--strictPort',action='store_true'); parser.add_argument('--agent-fixture',action='store_true',help='enable single-use synthetic SSE/read-tool experiment; no real models'); args=parser.parse_args()
+    server=make_server(args.port,enable_agent_fixture=args.agent_fixture)
     print(f'tokensfree MOCK ONLY — http://127.0.0.1:{server.server_port} (Ctrl+C to stop)',flush=True)
     try: server.serve_forever()
     except KeyboardInterrupt: pass

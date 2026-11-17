@@ -98,3 +98,6 @@ API 可选 `allowed_providers`，只能缩小到已配置的 mock-alpha / mock-b
 
 ## DSH 实验性 SSE + 工具闭环
 新增独立 `agent_fixture.py` 合成模型端点与 `experiments/dsh_tool_roundtrip.py`。固定官方 DSH 已在无外网实验中完成一次 `read` 工具调用、结果回传和最终回复。默认网关不变，尚不支持真实供应商的流式/工具路由，不能用于实际开发任务。复现、安全边界与验收见 [实验说明](docs/dsh-sse-stage.md)。
+
+## 本地网关合成 Agent 模式
+`python server.py --agent-fixture` 可在现有端点启用 `tokensfree-fixture` 合成 SSE/read 工具模型。默认启动及 UI 不变；这不是实际模型或免费 API 路由。一次进程只提供一次受限实验会话，普通场景重置不会重新派发工具。详见 [启动与安全边界](docs/gateway-agent-mode.md)。
