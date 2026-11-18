@@ -199,3 +199,43 @@ class EventsRepo:
         cursor = self._conn.execute("DELETE FROM events WHERE at < ?", (cutoff,))
         self._conn.commit()
         return cursor.rowcount
+
+
+class ProviderHealthRepo:
+    """Circuit-breaker snapshots so an open circuit survives a restart."""
+
+    def __init__(self, connection):
+        self._conn = connection
+
+    def get(self, provider):
+        row = self._conn.execute("SELECT * FROM provider_health WHERE provider = ?", (provider,)).fetchone()
+        if row is None:
+            return None
+        return {
+            "state": row["circuit_state"],
+            "fail_streak": row["fail_streak"],
+            "window_fails": row["window_fails"],
+            "open_until": row["open_until"],
+        }
+
+    def save(self, provider, snapshot):
+        if not isinstance(snapshot, dict):
+            raise TypeError("snapshot must be a dict")
+        self._conn.execute(
+            "INSERT INTO provider_health(provider, fail_streak, window_start, window_fails, circuit_state, open_until)"
+            " VALUES (?, ?, NULL, ?, ?, ?)"
+            " ON CONFLICT(provider) DO UPDATE SET fail_streak = excluded.fail_streak,"
+            " window_fails = excluded.window_fails, circuit_state = excluded.circuit_state,"
+            " open_until = excluded.open_until",
+            (
+                provider,
+                int(snapshot.get("fail_streak", 0)),
+                int(snapshot.get("window_fails", 0)),
+                str(snapshot.get("state", "closed")),
+                snapshot.get("open_until"),
+            ),
+        )
+        self._conn.commit()
+
+    def all(self):
+        return {row["provider"]: self.get(row["provider"]) for row in self._conn.execute("SELECT provider FROM provider_health")}

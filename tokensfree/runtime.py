@@ -18,7 +18,7 @@ from tokensfree.router.admission import admit
 from tokensfree.router.health import CircuitBreaker
 from tokensfree.router.scheduling import RoundRobin
 from tokensfree.store.db import connect, migrate
-from tokensfree.store.repos import EventsRepo, IdempotencyRepo, LedgerRepo
+from tokensfree.store.repos import EventsRepo, IdempotencyRepo, LedgerRepo, ProviderHealthRepo
 
 # Fixture providers have no free-tier claim to verify; their evidence is only a
 # safety assertion, so it must outlive a long-running demo server.
@@ -43,6 +43,7 @@ class Storage:
     idempotency: object
     ledger: object
     events: object
+    health: object
 
     @classmethod
     def open(cls, path=":memory:"):
@@ -55,6 +56,7 @@ class Storage:
             idempotency=IdempotencyRepo(connection),
             ledger=LedgerRepo(connection),
             events=EventsRepo(connection),
+            health=ProviderHealthRepo(connection),
         )
 
     def close(self):
@@ -77,8 +79,19 @@ def build_services(*, config, specs, adapters, authorized, clock=time.time, stor
         raise ValueError("authorized provider has no spec")
     if not callable(clock):
         raise TypeError("clock must be callable")
+    health = getattr(storage, "health", None)
     if breakers is None:
-        breakers = {spec.name: CircuitBreaker() for spec in specs}
+        breakers = {}
+        for spec in specs:
+            snapshot = health.get(spec.name) if health is not None else None
+            breaker = (
+                CircuitBreaker.from_snapshot(snapshot)
+                if snapshot is not None
+                else CircuitBreaker()
+            )
+            if health is not None:
+                breaker.watch(lambda changed, name=spec.name: health.save(name, changed.snapshot()))
+            breakers[spec.name] = breaker
     else:
         breakers = dict(breakers)
         unknown = set(breakers) - names

@@ -24,6 +24,33 @@ class CircuitBreaker:
         self._window_fails = 0
         self._open_until = None
         self._probe_in_flight = False
+        self._on_change = None
+
+    def watch(self, callback):
+        """Call callback(self) after every state change (used to persist health)."""
+        self._on_change = callback
+        return self
+
+    @classmethod
+    def from_snapshot(cls, data, *, threshold=5, window_s=60.0, open_s=30.0, on_change=None):
+        if not isinstance(data, dict):
+            raise ValueError("snapshot must be a dict")
+        breaker = cls(threshold=threshold, window_s=window_s, open_s=open_s)
+        state = data.get("state")
+        if state not in ("closed", "open", "half_open"):
+            raise ValueError("invalid circuit state in snapshot")
+        breaker._state = state
+        breaker._fail_streak = int(data.get("fail_streak", 0))
+        breaker._window_fails = int(data.get("window_fails", 0))
+        open_until = data.get("open_until")
+        breaker._open_until = None if open_until is None else float(open_until)
+        breaker._probe_in_flight = False
+        breaker._on_change = on_change
+        return breaker
+
+    def _changed(self):
+        if self._on_change is not None:
+            self._on_change(self)
 
     @property
     def state(self):
@@ -53,6 +80,7 @@ class CircuitBreaker:
             if now >= self._open_until:
                 self._state = "half_open"
                 self._probe_in_flight = True
+                self._changed()
                 return True
             return False
         return False
@@ -61,10 +89,13 @@ class CircuitBreaker:
         # A success starts a fresh accounting window: earlier failures stop counting.
         self._window_start = now
         self._window_fails = 0
+        was_closed = self._state == "closed"
         self._state = "closed"
         self._fail_streak = 0
         self._open_until = None
         self._probe_in_flight = False
+        if not was_closed or self._window_fails == 0:
+            self._changed()
 
     def record_failure(self, now):
         self._roll_window(now)
@@ -74,6 +105,7 @@ class CircuitBreaker:
             self._state = "open"
             self._open_until = float(now + self.open_s)
             self._probe_in_flight = False
+            self._changed()
 
     def snapshot(self):
         return {
