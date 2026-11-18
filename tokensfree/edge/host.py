@@ -224,7 +224,7 @@ def main():
     from tokensfree.config import load_config
     from tokensfree.edge.asgi import make_asgi_app
     from tokensfree.edge.backend import MemoryBackend
-    from tokensfree.runtime import Storage, build_loopback_streaming_runtime, build_mock_runtime
+    from tokensfree.runtime import Storage, build_loopback_streaming_runtime, build_mock_runtime, build_real_runtime
 
     parser = argparse.ArgumentParser(description="Serve the tokensfree ASGI app on loopback")
     parser.add_argument("--port", type=int, default=8766)
@@ -232,12 +232,26 @@ def main():
                         help="port of a local SSE fixture upstream; enables streaming instead of the mock runtime")
     parser.add_argument("--db", default=":memory:",
                         help="SQLite path for idempotency/ledger/events (default: in-memory, process lifetime)")
+    parser.add_argument("--real", action="store_true",
+                        help="use one real OpenAI-compatible provider configured by TOKENSFREE_REAL_* (still gated)")
     args = parser.parse_args()
     config = load_config(os.environ)
     if config.local_token is None:
         raise SystemExit("TOKENSFREE_LOCAL_TOKEN must be set for the new backend")
     storage = Storage.open(args.db)
-    if args.loopback is None:
+    if args.real and args.loopback is not None:
+        raise SystemExit("--real and --loopback are mutually exclusive")
+    if args.real:
+        try:
+            runtime = build_real_runtime(config=config, env=os.environ, storage=storage)
+        except ValueError as error:
+            raise SystemExit(str(error)) from None
+        mode = "real provider %r model %r (enable_real=%s)" % (
+            runtime.services.specs[0].name,
+            runtime.services.specs[0].model,
+            config.enable_real,
+        )
+    elif args.loopback is None:
         runtime = build_mock_runtime(config=config, storage=storage)
         mode = "mock runtime (no streaming provider)"
     else:

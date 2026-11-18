@@ -24,6 +24,7 @@
 - HTTP 后端契约、ASGI 适配器、可运行的 stdlib asyncio host（`edge/backend.py` / `asgi.py` / `host.py`）
 - 结构化访问日志（每请求一行，无 prompt）与 `x-request-id` 响应头
 - 真实调用闸门：开关 + 授权 + 未过期免费证据三者同时成立才放行（默认关闭）
+- 环境变量驱动的真实供应商装配（`--real` + `TOKENSFREE_REAL_*`）：D2 之后只需配置，不用改代码
 
 **上游适配器**
 - loopback 非流式 / 流式适配器（仅 127.0.0.1，硬截止时间）

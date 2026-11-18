@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from providers import ProviderSpec
 from tokensfree.adapters.loopback import LoopbackAdapter
+from tokensfree.adapters.openai_compat import OpenAICompatAdapter
 from tokensfree.adapters.transport import LoopbackStreamingAdapter
 from tokensfree.adapters.mock import MockChatAdapter
 from tokensfree.config import AppConfig, load_config
@@ -19,6 +20,15 @@ from tokensfree.store.repos import EventsRepo, IdempotencyRepo, LedgerRepo
 # Fixture providers have no free-tier claim to verify; their evidence is only a
 # safety assertion, so it must outlive a long-running demo server.
 DEFAULT_FIXTURE_TTL_S = 10 ** 9
+
+REAL_ENV_KEYS = (
+    "TOKENSFREE_REAL_PROVIDER",
+    "TOKENSFREE_REAL_BASE_URL",
+    "TOKENSFREE_REAL_API_KEY",
+    "TOKENSFREE_REAL_MODEL",
+    "TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT",
+)
+REAL_DEFAULT_CAPABILITIES = frozenset({"text", "stream", "tools"})
 
 
 @dataclass(frozen=True)
@@ -131,6 +141,64 @@ def build_loopback_streaming_runtime(port, *, config=None, clock=time.time, ttl_
             specs=(spec,),
             adapters={"loopback": LoopbackStreamingAdapter(port, timeout=timeout)},
             authorized=frozenset({"loopback"}),
+            clock=clock,
+            storage=storage,
+        ),
+        storage=storage,
+    )
+
+
+def real_spec_from_env(env, *, clock=time.time):
+    """Build the real ProviderSpec from an explicit environment mapping.
+
+    Fails closed with the exact missing/invalid variable names. The API key is
+    never returned in error messages.
+    """
+    missing = [key for key in REAL_ENV_KEYS if not str(env.get(key, "")).strip()]
+    if missing:
+        raise ValueError("missing real-provider environment: " + ", ".join(missing))
+    provider = str(env["TOKENSFREE_REAL_PROVIDER"]).strip()
+    model = str(env["TOKENSFREE_REAL_MODEL"]).strip()
+    if not provider or not model:
+        raise ValueError("provider and model must be non-empty")
+    try:
+        expires_at = float(env["TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT"])
+    except (TypeError, ValueError):
+        raise ValueError("TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT must be a unix timestamp") from None
+    now = clock()
+    if expires_at <= now:
+        raise ValueError("TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT is in the past; refresh the free-tier evidence first")
+    return ProviderSpec(
+        provider,
+        model,
+        "free_verified",
+        expires_at,
+        REAL_DEFAULT_CAPABILITIES,
+        simulation=False,
+    )
+
+
+def build_real_runtime(*, config, env, clock=time.time, storage=None, timeout=15.0, max_stream_s=120.0):
+    """Runtime for one real OpenAI-compatible provider, configured from the environment.
+
+    Building it does not mean calling it: admission still requires
+    TOKENSFREE_ENABLE_REAL=1 plus valid evidence.
+    """
+    spec = real_spec_from_env(env, clock=clock)
+    adapter = OpenAICompatAdapter(
+        str(env["TOKENSFREE_REAL_BASE_URL"]).strip(),
+        str(env["TOKENSFREE_REAL_API_KEY"]).strip(),
+        timeout=timeout,
+        max_stream_s=max_stream_s,
+        allow_remote=True,
+    )
+    return Runtime(
+        config=config,
+        services=build_services(
+            config=config,
+            specs=(spec,),
+            adapters={spec.name: adapter},
+            authorized=frozenset({spec.name}),
             clock=clock,
             storage=storage,
         ),
