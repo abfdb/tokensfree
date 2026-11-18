@@ -80,16 +80,23 @@ $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
 
 端点：`GET /v1/models`、`POST /v1/chat/completions`（非流式）。Host/Origin/令牌校验与旧实现共用同一套函数。
 mock 运行时没有流式适配器，因此 `stream:true` 会得到明确的 `400 unsupported_capability`（不静默降级）。
+要演示完整流式链路，先起一个本地假 SSE 上游，再启动后端：
+
+```sh
+.venv\Scripts\python -m tokensfree.edge.host --port 8766 --loopback <上游端口>
+```
+
+流式响应使用 `Transfer-Encoding: chunked`，帧序列为 role → content → finish → `[DONE]`。
 一旦 D1 选定服务器框架，同一个 ASGI app 可以换由 uvicorn/hypercorn 托管；aiohttp 后端也只是另一个 `Backend` 实现。
 
-> 新内核的验证：`python -m pytest -q` 共 287 项（含 5 个端到端用例：真实本地 HTTP 假上游 → 传输 → 解析 → 流式核心 → 客户端帧）。
+> 新内核的验证：`python -m pytest -q` 共 289 项（含 5 个端到端用例：真实本地 HTTP 假上游 → 传输 → 解析 → 流式核心 → 客户端帧）。
 
 ## 验证
 
 ```sh
 python -m pip install -r requirements-dev.txt
 python -m ruff check .
-python -m pytest -q          # 287 项，Windows/macOS/Linux 三平台一致
+python -m pytest -q          # 289 项，Windows/macOS/Linux 三平台一致
 python check_dsh_contract.py # 8 项契约矩阵，退出 0 表示拒绝行为符合预期
 ```
 
