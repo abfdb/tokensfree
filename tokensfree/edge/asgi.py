@@ -71,6 +71,8 @@ def make_asgi_app(backend):
             raise RuntimeError("only http scope is supported")
         started = time.monotonic()
         info = {"status": None, "request_id": None}
+        stream = None
+        stream_exhausted = False
 
         async def send_tracked(message):
             if message.get("type") == "http.response.start":
@@ -118,10 +120,21 @@ def make_asgi_app(backend):
             )
             if first_chunk is not None:
                 await send_tracked({"type": "http.response.body", "body": first_chunk, "more_body": True})
-            async for chunk in stream:
-                await send_tracked({"type": "http.response.body", "body": chunk, "more_body": True})
-            await send_tracked({"type": "http.response.body", "body": b"", "more_body": False})
+            try:
+                async for chunk in stream:
+                    await send_tracked({"type": "http.response.body", "body": chunk, "more_body": True})
+                await send_tracked({"type": "http.response.body", "body": b"", "more_body": False})
+                stream_exhausted = True
+            except BaseException:
+                raise
         finally:
+            if stream is not None and not stream_exhausted:
+                # Client disconnected (send failed) or the app died mid-stream: close the
+                # upstream generator so its transport releases the connection promptly.
+                try:
+                    await stream.aclose()
+                except Exception:
+                    pass
             fields = {
                 "method": str(scope.get("method", "")),
                 "path": str(scope.get("path", "/"))[:MAX_LOGGED_PATH],
