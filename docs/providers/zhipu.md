@@ -54,6 +54,7 @@ python scripts/real_smoke.py       # 真实验收（启动网关 + 真实 DSH）
 ## 待办（拿到 Key 后）
 
 1. `python scripts/real_probe.py --stream --tools`：用真实 Key 直接探针（非流式 / 流式 / 工具调用三条路径，成本极小），确认响应体形状、`usage` 与 `tool_calls`
+2. `python scripts/evidence_snapshot.py --provider zhipu --model glm-4.7-flash`：抓取官方定价页、计算 sha256、确认输入/输出两列都是"免费"，把快照写到 `.superpowers/evidence/`（不进 Git），并给出 `TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT` 建议值
 2. 跑 `scripts/real_smoke.py`（真实 DSH 走网关）
 3. 若 429 出现，核对实际 `error.code` 与上表是否一致
 4. 记录证据与验收结果

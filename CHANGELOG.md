@@ -29,6 +29,7 @@
 - 环境变量驱动的真实供应商装配（`--real` + `TOKENSFREE_REAL_*`）：D2 之后只需配置，不用改代码
 - 真实供应商验收脚本 `scripts/real_smoke.py`（`--fixture` 自检模式用本地假上游，真实模式驱动 DSH）
 - 真实供应商直连探针 `scripts/real_probe.py`（非流式 / 流式 / 工具调用三条路径，成本极小）
+- 免费证据快照工具 `scripts/evidence_snapshot.py`（精确匹配模型行、只认输入/输出价格列、sha256 + 到期时间）
 - 非流式响应的 `tool_calls` 现在完整透传给客户端（此前会被丢弃）
 
 **上游适配器**
