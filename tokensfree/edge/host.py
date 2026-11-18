@@ -239,6 +239,8 @@ def main():
                         help="SQLite path for idempotency/ledger/events (default: in-memory, process lifetime)")
     parser.add_argument("--real", action="store_true",
                         help="use one real OpenAI-compatible provider configured by TOKENSFREE_REAL_* (still gated)")
+    parser.add_argument("--check", action="store_true",
+                        help="validate the configuration (key, evidence, db) and exit without binding a port")
     args = parser.parse_args()
     config = load_config(os.environ)
     if config.local_token is None:
@@ -253,6 +255,10 @@ def main():
         try:
             runtime = build_real_runtime(config=config, env=os.environ, storage=storage)
         except ValueError as error:
+            if args.check:
+                storage.close()
+                print(json.dumps({"ok": False, "mode": "real", "error": str(error)}, ensure_ascii=False, indent=2))
+                return 2
             raise SystemExit(str(error)) from None
         mode = "real provider %r model %r (enable_real=%s)" % (
             runtime.services.specs[0].name,
@@ -267,6 +273,32 @@ def main():
         mode = "loopback streaming runtime -> 127.0.0.1:%d" % args.loopback
     # --port 0 asks the OS for a free port; the real one is known only after binding,
     # so the backend is told the final port in on_ready (before any handler runs).
+    if args.check:
+        providers = [
+            {
+                "name": spec.name,
+                "model": spec.model,
+                "simulation": bool(getattr(spec, "simulation", True)),
+                "evidence_expires_at": spec.evidence_expires_at,
+            }
+            for spec in runtime.services.specs
+        ]
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "mode": mode,
+                    "db": args.db,
+                    "real_enabled": config.enable_real,
+                    "providers": providers,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        storage.close()
+        return 0
+
     backend = MemoryBackend(config=config, services=runtime.services, port=args.port or 8766, token=config.local_token)
     host = AsgiHost(make_asgi_app(backend), port=args.port, max_body=config.max_body_bytes)
 
