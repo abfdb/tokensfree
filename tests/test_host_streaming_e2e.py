@@ -1,8 +1,6 @@
 """Full streaming path through the real HTTP host and a real local SSE upstream."""
 import http.client
 import json
-import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
@@ -10,47 +8,19 @@ from tokensfree.config import load_config
 from tokensfree.edge.asgi import make_asgi_app
 from tokensfree.edge.backend import MemoryBackend
 from host_support import HostRunner
+from upstream_support import SSEUpstream
 from tokensfree.runtime import build_loopback_streaming_runtime
 
-TOKEN = "f" * 32
-CONFIG = load_config({"TOKENSFREE_LOCAL_TOKEN": TOKEN})
-PAYLOAD = {"model": "tokensfree-auto", "messages": [{"role": "user", "content": "hi"}], "stream": True}
-
-SSE_BODY = (
+UPSTREAM_SSE = (
     'data: {"choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n'
     'data: {"choices":[{"index":0,"delta":{"content":"upstream hello"},"finish_reason":null}]}\n\n'
     'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n'
     "data: [DONE]\n\n"
 )
 
-
-class UpstreamHandler(BaseHTTPRequestHandler):
-    def log_message(self, *args):
-        pass
-
-    def do_POST(self):
-        length = int(self.headers.get("Content-Length", "0"))
-        self.rfile.read(length)
-        payload = SSE_BODY.encode()
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream")
-        self.send_header("Content-Length", str(len(payload)))
-        self.end_headers()
-        self.wfile.write(payload)
-
-
-@pytest.fixture()
-def upstream():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), UpstreamHandler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield server.server_port
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join()
-
+TOKEN = "f" * 32
+CONFIG = load_config({"TOKENSFREE_LOCAL_TOKEN": TOKEN})
+PAYLOAD = {"model": "tokensfree-auto", "messages": [{"role": "user", "content": "hi"}], "stream": True}
 
 def start_backend(upstream_port):
     runtime = build_loopback_streaming_runtime(upstream_port, config=CONFIG)
@@ -75,6 +45,16 @@ def request(port, body):
     status = response.status
     connection.close()
     return status, headers, payload
+
+
+@pytest.fixture()
+def upstream():
+    server = SSEUpstream(UPSTREAM_SSE)
+    server.start()
+    try:
+        yield server.port
+    finally:
+        server.stop()
 
 
 def test_streaming_end_to_end_through_real_host(upstream):

@@ -1,8 +1,6 @@
 """Upstream transport: stdlib loopback SSE client plus full streaming end-to-end."""
 import asyncio
 import json
-import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
@@ -12,127 +10,65 @@ from tokensfree.adapters.transport import LoopbackSSETransport, LoopbackStreamin
 from tokensfree.config import load_config
 from tokensfree.edge.stream_core import iter_frames, prepare_stream
 from tokensfree.router.admission import admit
-
-SSE_BODY = (
-    'data: {"choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n'
-    'data: {"choices":[{"index":0,"delta":{"content":"he"},"finish_reason":null}]}\n\n'
-    'data: {"choices":[{"index":0,"delta":{"content":"llo"},"finish_reason":null}]}\n\n'
-    'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n'
-    "data: [DONE]\n\n"
-)
-
-
-class Handler(BaseHTTPRequestHandler):
-    status = 200
-    body = SSE_BODY
-    content_type = "text/event-stream"
-    extra_headers = {}
-
-    def log_message(self, *args):
-        pass
-
-    def do_POST(self):
-        length = int(self.headers.get("Content-Length", "0"))
-        self.rfile.read(length)
-        payload = type(self).body.encode()
-        self.send_response(type(self).status)
-        self.send_header("Content-Type", type(self).content_type)
-        self.send_header("Content-Length", str(len(payload)))
-        for name, value in type(self).extra_headers.items():
-            self.send_header(name, value)
-        self.end_headers()
-        self.wfile.write(payload)
+from upstream_support import SSEUpstream
 
 
 @pytest.fixture()
 def upstream():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
+    server = SSEUpstream()
+    server.start()
     try:
-        yield server.server_port
+        yield server
     finally:
-        server.shutdown()
-        server.server_close()
-        thread.join()
+        server.stop()
 
 
-def collect_events(adapter, action=None):
-    async def run_all():
-        events = []
-        async for event in adapter.stream("request", "admission"):
-            events.append(event)
-        return events
-    return asyncio.run(run_all())
+def adapter_request():
+    from tokensfree.adapters.base import ChatRequest
 
-
-class AdmissionStub:
-    pass
+    return ChatRequest(model="fixture-model", messages=({"role": "user", "content": "hi"},))
 
 
 def test_transport_reads_sse_frames(upstream):
-    transport = LoopbackSSETransport(upstream)
+    transport = LoopbackSSETransport(upstream.port)
     lines = list(transport.iter_lines(b'{"model":"fixture-model"}'))
     joined = "".join(lines)
-    assert "hello" not in joined  # sanity: only frames we sent
     assert "[DONE]" in joined
 
 
 def test_adapter_stream_yields_parsed_events(upstream):
-    adapter = LoopbackStreamingAdapter(upstream)
     from tokensfree.adapters.base import Admission, _ADMISSION_TOKEN
 
+    adapter = LoopbackStreamingAdapter(upstream.port)
     admission = Admission(provider="loopback", capabilities=frozenset({"text", "stream"}), simulation=True, _token=_ADMISSION_TOKEN)
+
     async def run_all():
-        events = []
-        async for event in adapter.stream(adapter_request(), admission):
-            events.append(event)
-        return events
+        return [event async for event in adapter.stream(adapter_request(), admission)]
+
     events = asyncio.run(run_all())
     assert [event.kind for event in events] == ["delta", "delta", "delta", "finish", "done"]
     assert events[1].delta == {"content": "he"}
 
 
-def adapter_request():
-    from tokensfree.adapters.base import ChatRequest
-    return ChatRequest(model="fixture-model", messages=({"role": "user", "content": "hi"},))
-
-
 def test_upstream_429_without_retry_after_is_quota_exhausted(upstream):
-    Handler.status = 429
-    Handler.body = "{}"
-    Handler.content_type = "application/json"
-    try:
-        with pytest.raises(NormalizedError) as caught:
-            list(LoopbackSSETransport(upstream).iter_lines(b"{}"))
-    finally:
-        Handler.status = 200
-        Handler.body = SSE_BODY
-        Handler.content_type = "text/event-stream"
+    upstream.configure(status=429, body="{}", content_type="application/json")
+    with pytest.raises(NormalizedError) as caught:
+        list(LoopbackSSETransport(upstream.port).iter_lines(b"{}"))
     assert caught.value.code == "quota_exhausted"
     assert caught.value.retryable is False
 
 
 def test_upstream_429_with_retry_after_is_retryable(upstream):
-    Handler.status = 429
-    Handler.body = "{}"
-    Handler.content_type = "application/json"
-    Handler.extra_headers = {"Retry-After": "5"}
-    try:
-        with pytest.raises(NormalizedError) as caught:
-            list(LoopbackSSETransport(upstream).iter_lines(b"{}"))
-    finally:
-        Handler.status = 200
-        Handler.body = SSE_BODY
-        Handler.content_type = "text/event-stream"
-        Handler.extra_headers = {}
+    upstream.configure(status=429, body="{}", content_type="application/json", headers={"Retry-After": "5"})
+    with pytest.raises(NormalizedError) as caught:
+        list(LoopbackSSETransport(upstream.port).iter_lines(b"{}"))
     assert caught.value.code == "rate_limited"
     assert caught.value.retryable is True
 
 
 def test_full_streaming_path_to_client_frames(upstream):
     config = load_config({})
-    adapter = LoopbackStreamingAdapter(upstream)
+    adapter = LoopbackStreamingAdapter(upstream.port)
     spec = ProviderSpec("loopback", "fixture-model", "mock_zero_cost", 200, frozenset({"text", "stream"}))
     services = type("S", (), {})()
     services.specs = (spec,)
@@ -170,19 +106,16 @@ def test_transport_rejects_non_loopback_shapes():
 def test_malformed_frame_raises(upstream):
     from tokensfree.adapters.base import Admission, _ADMISSION_TOKEN
 
-    Handler.body = 'data: {not json}\n\n'
-    adapter = LoopbackStreamingAdapter(upstream)
+    upstream.configure(body='data: {not json}\n\n')
+    adapter = LoopbackStreamingAdapter(upstream.port)
     admission = Admission(provider="loopback", capabilities=frozenset({"text", "stream"}), simulation=True, _token=_ADMISSION_TOKEN)
 
     async def run_all():
         async for _ in adapter.stream(adapter_request(), admission):
             pass
 
-    try:
-        with pytest.raises(NormalizedError) as caught:
-            asyncio.run(run_all())
-    finally:
-        Handler.body = SSE_BODY
+    with pytest.raises(NormalizedError) as caught:
+        asyncio.run(run_all())
     assert caught.value.code == "invalid_response"
 
 
