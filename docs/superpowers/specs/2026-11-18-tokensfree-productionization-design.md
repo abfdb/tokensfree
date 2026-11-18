@@ -327,3 +327,26 @@ G1（DSH 工具往返）、G2（默认零外发的 HTTP 侧证明）、G5 的 ke
 2. 带 `tool_calls` 的 assistant 消息 `content: null`，旧契约要求必须为字符串。
 
 限制：上游是合成 SSE fixture，不是真实供应商；Windows 上无网络命名空间隔离，因此"零外发"由配置（仅 loopback baseURL）与脚本断言保证，不等同 Linux 命名空间证明。
+
+
+## 附录 F：13–26 轮落地记录
+
+在不依赖 D1/D2 的前提下把内核补到"只差真实供应商"：
+
+| 轮次 | 落地 |
+|---|---|
+| 13 | 边缘原语：auth / models / routes |
+| 14 | 旧处理器复用共享 auth（Bearer 方案名大小写不敏感，记为偏离 #7） |
+| 15 | 后端契约 `backend.py` + MemoryBackend + 契约测试 |
+| 16 | DSH 请求形状钉死（23 工具、developer 映射、tool 往返） |
+| 17 | ASGI 适配器（零依赖，可换任意 ASGI 服务器） |
+| 18 | 可运行 stdlib asyncio HTTP host（chunked 流式、413/400、并发安全） |
+| 19 | loopback 流式运行时 + 双进程流式冒烟 |
+| 20 | **真实 DSH headless 冒烟通过**；修复 max_tokens 上限、content:null、工具未转发三个真实兼容问题 |
+| 21 | DSH 冒烟转为 opt-in 回归门禁；差距文档更新 |
+| 22 | 账号调度纯逻辑（LRU / 冷却 / 并发上限） |
+| 23 | 熔断器 + 静态网络导入门禁（接入 verify_p0） |
+| 24–25 | 熔断接入非流式与流式两条执行路径，Services 统一注入 |
+| 26 | 账号池：调度 + 仓储 + 账本合体 |
+
+审计结论：内核对外的三个入口（旧 mock server、新 host、ASGI app）均可运行；无 TODO/FIXME 残留；未发现无引用模块（`adapters.mock`、`obs`、`account_pool` 为间接/待接线引用）。真实供应商与 keyring 仍是唯一阻塞项（D2）。

@@ -115,6 +115,8 @@ python check_dsh_contract.py # 329 项契约矩阵，退出 0 表示拒绝行为
 
 一条命令验收 P0：`python scripts/verify_p0.py`（lint → 测试 → 契约矩阵 → 导入出口门禁 → 密钥扫描）。
 
+启动方式、令牌配置、故障排查与已知限制见 [操作手册](docs/operator-guide.md)。
+
 | 阶段 | 状态 |
 |---|---|
 | P0 工程基线：CI（三平台 × 3 个 Python 版本）、统一错误契约、结构化日志、契约矩阵可注入 | ✅ 完成 |
