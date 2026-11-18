@@ -233,6 +233,17 @@ def main():
             env.setdefault("SYSTEMROOT", r"C:\Windows")
             env.setdefault("WINDIR", r"C:\Windows")
             env.setdefault("COMSPEC", r"C:\Windows\System32\cmd.exe")
+            # Missing drive/app-data variables make some Windows APIs create literal
+            # "%SystemDrive%/..." directories inside the current working directory.
+            env.setdefault("SystemDrive", "C:")
+            env.setdefault("HOMEDRIVE", "C:")
+            env.setdefault("HOMEPATH", r"\Users\smoke")
+            env.setdefault("ProgramData", r"C:\ProgramData")
+            env.setdefault("ProgramFiles", r"C:\Program Files")
+            env.setdefault("ProgramFiles(x86)", r"C:\Program Files (x86)")
+            env.setdefault("APPDATA", str(home / "AppData" / "Roaming"))
+            env.setdefault("LOCALAPPDATA", str(home / "AppData" / "Local"))
+            env.setdefault("PUBLIC", r"C:\Users\Public")
             env.setdefault("TEMP", os.environ.get("TEMP", r"C:\Windows\Temp"))
             env.setdefault("USERNAME", os.environ.get("USERNAME", "smoke"))
             env.update(
