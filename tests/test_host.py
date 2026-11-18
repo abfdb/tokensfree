@@ -3,7 +3,6 @@ import http.client
 import json
 import socket
 import threading
-import time
 
 from providers import ProviderSpec
 from tokensfree.adapters.base import ChatResult
@@ -12,7 +11,7 @@ from tokensfree.config import load_config
 from tokensfree.edge.app_core import Services
 from tokensfree.edge.asgi import make_asgi_app
 from tokensfree.edge.backend import MemoryBackend
-from tokensfree.edge.host import AsgiHost
+from host_support import HostRunner
 from tokensfree.router.admission import admit
 
 TOKEN = "d" * 32
@@ -43,30 +42,6 @@ def make_app(specs, adapters, max_body=262144):
     services = Services(specs=tuple(specs), adapters=adapters, admit=lambda spec: admit(spec, CONFIG, names, 100), authorized=names)
     backend = MemoryBackend(config=CONFIG, services=services, port=8765, token=TOKEN)
     return backend, make_asgi_app(backend)
-
-
-class HostRunner:
-    def __init__(self, app, max_body=262144):
-        self.host = AsgiHost(app, port=0, max_body=max_body)
-        self.thread = threading.Thread(target=lambda: asyncio_run(self.host.run_forever()), daemon=True)
-
-    def start(self):
-        self.thread.start()
-        deadline = time.time() + 10
-        while self.host.port == 0 and time.time() < deadline:
-            time.sleep(0.01)
-        assert self.host.port, "host did not start"
-        return self.host.port
-
-    def stop(self):
-        self.host.stop()
-        self.thread.join(10)
-
-
-def asyncio_run(coroutine):
-    import asyncio
-
-    asyncio.run(coroutine)
 
 
 def request(port, method, path, *, body=None, headers=None):

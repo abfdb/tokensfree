@@ -1,9 +1,7 @@
 """Full streaming path through the real HTTP host and a real local SSE upstream."""
-import asyncio
 import http.client
 import json
 import threading
-import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
@@ -11,7 +9,7 @@ import pytest
 from tokensfree.config import load_config
 from tokensfree.edge.asgi import make_asgi_app
 from tokensfree.edge.backend import MemoryBackend
-from tokensfree.edge.host import AsgiHost
+from host_support import HostRunner
 from tokensfree.runtime import build_loopback_streaming_runtime
 
 TOKEN = "f" * 32
@@ -39,24 +37,6 @@ class UpstreamHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
-
-
-class HostRunner:
-    def __init__(self, app):
-        self.host = AsgiHost(app, port=0)
-        self.thread = threading.Thread(target=lambda: asyncio.run(self.host.run_forever()), daemon=True)
-
-    def start(self):
-        self.thread.start()
-        deadline = time.time() + 10
-        while self.host.port == 0 and time.time() < deadline:
-            time.sleep(0.01)
-        assert self.host.port, "host did not start"
-        return self.host.port
-
-    def stop(self):
-        self.host.stop()
-        self.thread.join(10)
 
 
 @pytest.fixture()
