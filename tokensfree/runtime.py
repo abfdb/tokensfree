@@ -18,7 +18,7 @@ from tokensfree.router.admission import admit
 from tokensfree.router.health import CircuitBreaker
 from tokensfree.router.scheduling import RoundRobin
 from tokensfree.store.db import connect, migrate
-from tokensfree.store.repos import EventsRepo, IdempotencyRepo, LedgerRepo, ProviderHealthRepo
+from tokensfree.store.repos import AccountsRepo, EventsRepo, IdempotencyRepo, LedgerRepo, ProviderHealthRepo
 
 # Fixture providers have no free-tier claim to verify; their evidence is only a
 # safety assertion, so it must outlive a long-running demo server.
@@ -44,6 +44,7 @@ class Storage:
     ledger: object
     events: object
     health: object
+    accounts: object
 
     @classmethod
     def open(cls, path=":memory:"):
@@ -57,6 +58,7 @@ class Storage:
             ledger=LedgerRepo(connection),
             events=EventsRepo(connection),
             health=ProviderHealthRepo(connection),
+            accounts=AccountsRepo(connection),
         )
 
     def close(self):
@@ -70,7 +72,7 @@ class Runtime:
     storage: object = None
 
 
-def build_services(*, config, specs, adapters, authorized, clock=time.time, storage=None, breakers=None, rotation=None):
+def build_services(*, config, specs, adapters, authorized, clock=time.time, storage=None, breakers=None, rotation=None, account_ids=None):
     specs = tuple(specs)
     names = {spec.name for spec in specs}
     if set(adapters) - names:
@@ -111,6 +113,7 @@ def build_services(*, config, specs, adapters, authorized, clock=time.time, stor
         events=getattr(storage, "events", None),
         breakers=breakers,
         rotation=rotation,
+        account_ids=account_ids,
     )
 
 
@@ -266,6 +269,22 @@ def build_real_runtime(*, config, env, clock=time.time, storage=None, timeout=15
     """
     specs, keys = real_specs_from_env(env, clock=clock)
     base_url = str(env["TOKENSFREE_REAL_BASE_URL"]).strip()
+    account_ids = None
+    accounts = getattr(storage, "accounts", None)
+    if accounts is not None:
+        import hashlib
+
+        account_ids = {}
+        for spec, key in zip(specs, keys):
+            account_ids[spec.name] = accounts.ensure(
+                spec.name,
+                "env-key",
+                "env:" + spec.name,
+                hashlib.sha256(key.encode("utf-8")).hexdigest(),
+                now=clock(),
+                tier="free_verified",
+                status="active",
+            )
     adapters = {
         spec.name: OpenAICompatAdapter(
             base_url,
@@ -286,6 +305,7 @@ def build_real_runtime(*, config, env, clock=time.time, storage=None, timeout=15
             clock=clock,
             storage=storage,
             rotation=RoundRobin(),
+            account_ids=account_ids,
         ),
         storage=storage,
     )

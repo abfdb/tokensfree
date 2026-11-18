@@ -84,6 +84,19 @@ class AccountsRepo:
         self._conn.commit()
         return cursor.lastrowid
 
+    def ensure(self, provider, alias, credential_ref, fingerprint, *, now, tier="real_declared", status="active"):
+        """Create the account once; return its id on later starts (no duplicates)."""
+        self._conn.execute(
+            "INSERT OR IGNORE INTO accounts(provider, alias, credential_ref, fingerprint, tier, status, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (provider, alias, credential_ref, fingerprint, tier, status, now),
+        )
+        self._conn.commit()
+        row = self._conn.execute(
+            "SELECT id FROM accounts WHERE provider = ? AND alias = ?", (provider, alias)
+        ).fetchone()
+        return row["id"]
+
     def get(self, account_id):
         return self._conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
 

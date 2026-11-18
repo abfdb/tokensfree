@@ -21,6 +21,7 @@
 - 账号调度（LRU / 冷却 / 并发上限）、熔断器、账号池（`router/scheduling.py` / `health.py` / `account_pool.py`）
 - 运行时默认按 provider 装配熔断器：连续失败后跳过该 provider，`/api/status` 可见，窗口结束后单探测恢复
 - 熔断状态持久化到 `provider_health` 表（`--db` 时跨重启保留）
+- 真实 key 自动登记为账号（仅存 sha256 指纹），成功请求写配额账本，重放不重复计费
 - SQLite 持久化：迁移、幂等键、只增账本、事件（`store/`），并接入可运行服务（`--db`，默认进程内）
 
 **边缘与协议**

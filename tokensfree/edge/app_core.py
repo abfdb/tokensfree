@@ -34,6 +34,7 @@ class Services:
     events: object = None
     breakers: object = None
     rotation: object = None
+    account_ids: object = None
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,13 @@ async def _execute(payload, *, services, request_id, developer_role_policy):
     return ChatOutcome(status=200, body=body, request_id=request_id, provider=execution.provider)
 
 
+def account_for(services, provider):
+    mapping = getattr(services, "account_ids", None)
+    if not mapping or provider is None:
+        return None
+    return mapping.get(provider)
+
+
 def _record(services, outcome, *, request_id, account_id, started):
     detail = json.dumps({"status": outcome.status, "error": _error_code(outcome.body)}, ensure_ascii=False)
     if services.ledger is not None and account_id is not None:
@@ -185,7 +193,7 @@ async def handle_chat(payload, *, services, request_id, developer_role_policy="m
                 services.events.append(
                     request_id,
                     outcome="replay",
-                    account_id=account_id,
+                    account_id=account_id if account_id is not None else account_for(services, replay.body.get("model") if isinstance(replay.body, dict) else None),
                     latency_ms=int((time.time() - started) * 1000),
                     detail=json.dumps({"status": replay.status, "error": _error_code(replay.body)}, ensure_ascii=False),
                     at=started,
@@ -212,5 +220,6 @@ async def handle_chat(payload, *, services, request_id, developer_role_policy="m
             # The reservation expired (TTL) while this request was running. The
             # response is still valid; only the replay record is gone.
             pass
-    _record(services, outcome, request_id=request_id, account_id=account_id, started=started)
+    recorded_account = account_id if account_id is not None else account_for(services, outcome.provider)
+    _record(services, outcome, request_id=request_id, account_id=recorded_account, started=started)
     return outcome
