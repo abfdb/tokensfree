@@ -113,7 +113,7 @@ python check_dsh_contract.py # 8 组拒绝行为矩阵，退出 0 表示符合�
 
 推荐在虚拟环境中安装开发依赖：`python -m venv .venv`，再 `.venv\Scripts\pip install -r requirements-dev.txt`（macOS/Linux 用 `.venv/bin/pip`）。之后的命令用 `.venv\Scripts\python` 代替 `python`。
 
-一条命令验收 P0：`python scripts/verify_p0.py`（lint → 测试 → 契约矩阵 → 导入出口门禁 → 密钥扫描）。
+一条命令验收 P0：`python scripts/verify_p0.py`（lint → 测试 → 契约矩阵 → 导入出口门禁 → 用户旅程 → 密钥扫描）。
 
 启动方式、令牌配置、故障排查与已知限制见 [操作手册](docs/operator-guide.md)；旧实现与新内核的差异见 [对照表](docs/legacy-parity.md)；版本演进见 [CHANGELOG](CHANGELOG.md)。
 
@@ -130,7 +130,7 @@ python check_dsh_contract.py # 8 组拒绝行为矩阵，退出 0 表示符合�
 
 **当前验证状态（2026-11-18）**
 
-- `scripts/verify_p0.py` → P0 OK（ruff / pytest / 契约矩阵 / 导入出口门禁 / 密钥扫描）
+- `scripts/verify_p0.py` → P0 OK（ruff / pytest / 契约矩阵 / 导入出口门禁 / **真实进程用户旅程** / 密钥扫描）
 - 干净克隆 → venv → 安装依赖 → `verify_p0.py` → P0 OK（可复现）
 - 真实 DSH 0.2.2-rc.1 headless + 合成上游：流式、23 个工具透传、`read` 工具往返、最终文本、退出码 0 全部通过（`scripts/dsh_smoke.py`）
 - P0–P3 内核与审计修复共 379 项测试通过（1 项 opt-in DSH 用例默认跳过）

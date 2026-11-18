@@ -101,7 +101,8 @@ curl -s http://127.0.0.1:8766/v1/chat/completions -H "Host: 127.0.0.1:8766" -H "
 ## 4. 验收
 
 ~~~sh
-.venv\Scripts\python scripts/verify_p0.py     # lint → 测试 → 契约矩阵 → 导入门禁 → 密钥扫描
+.venv\Scripts\python scripts/verify_p0.py     # lint → 测试 → 契约矩阵 → 导入门禁 → 用户旅程 → 密钥扫描
+.venv\Scripts\python scripts/journey_smoke.py  # 只跑"文档用户旅程"：启动服务→models→chat→幂等→status→重启重放
 .venv\Scripts\python scripts/check_imports.py # 只跑静态出口门禁
 ~~~
 
