@@ -174,3 +174,12 @@ def test_unsupported_tool_choice_shapes_are_rejected(choice):
 
     with pytest.raises(RequestRejected):
         parse_chat_payload(payload(tool_choice=choice))
+
+
+
+@pytest.mark.parametrize("role", [[], {}, ["user"], {"user": True}, 3, True])
+def test_non_string_roles_are_rejected_without_a_type_error(role):
+    from tokensfree.edge.protocol import RequestRejected
+
+    with pytest.raises(RequestRejected):
+        parse_chat_payload(payload(messages=[{"role": role, "content": "hi"}]))

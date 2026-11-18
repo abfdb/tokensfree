@@ -60,7 +60,8 @@ def _parse_messages(messages, developer_role_policy, max_messages, max_content_c
             _reject()
         role = message.get("role")
         content = message.get("content")
-        if role not in ALLOWED_ROLES:
+        # isinstance first: unhashable JSON values (list/dict) must not leak a TypeError.
+        if not isinstance(role, str) or role not in ALLOWED_ROLES:
             _reject()
         if not isinstance(content, str):
             # OpenAI permits content:null when an assistant message carries tool_calls.
