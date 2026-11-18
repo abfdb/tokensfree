@@ -23,6 +23,7 @@
 - 熔断状态持久化到 `provider_health` 表（`--db` 时跨重启保留）
 - 真实 key 自动登记为账号（仅存 sha256 指纹），成功请求写配额账本，重放不重复计费
 - 账号作用域失败（额度耗尽 / 鉴权失败 / 限流）会更新账号状态（platform_signal、invalid、cooldown）并自动回退到下一个 key；内容级失败（refusal 等）仍然立即终止
+- 账号状态参与路由：exhausted / invalid / 冷却中的 key 在准入阶段被跳过（`/api/status` 可见 `account_*` 原因）
 - SQLite 持久化：迁移、幂等键、只增账本、事件（`store/`），并接入可运行服务（`--db`，默认进程内）
 
 **边缘与协议**

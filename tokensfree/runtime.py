@@ -14,7 +14,7 @@ from tokensfree.adapters.transport import LoopbackStreamingAdapter
 from tokensfree.adapters.mock import MockChatAdapter
 from tokensfree.config import AppConfig, load_config
 from tokensfree.edge.app_core import Services
-from tokensfree.router.admission import admit
+from tokensfree.router.admission import AdmissionDenied, admit
 from tokensfree.router.health import CircuitBreaker
 from tokensfree.router.scheduling import RoundRobin
 from tokensfree.store.db import connect, migrate
@@ -72,7 +72,7 @@ class Runtime:
     storage: object = None
 
 
-def build_services(*, config, specs, adapters, authorized, clock=time.time, storage=None, breakers=None, rotation=None, account_ids=None):
+def build_services(*, config, specs, adapters, authorized, clock=time.time, storage=None, breakers=None, rotation=None, account_ids=None, accounts=None):
     specs = tuple(specs)
     names = {spec.name for spec in specs}
     if set(adapters) - names:
@@ -101,7 +101,18 @@ def build_services(*, config, specs, adapters, authorized, clock=time.time, stor
             raise ValueError("breaker registered without a provider spec: " + ", ".join(sorted(unknown)))
 
     def gate(spec):
-        return admit(spec, config, frozenset(authorized), clock())
+        admission = admit(spec, config, frozenset(authorized), clock())
+        if account_ids and accounts is not None:
+            account_id = account_ids.get(spec.name)
+            if account_id is not None:
+                row = accounts.get(account_id)
+                if row is not None:
+                    if row["status"] != "active":
+                        raise AdmissionDenied("account_" + str(row["status"]))
+                    cooldown_until = row["cooldown_until"]
+                    if cooldown_until is not None and cooldown_until > clock():
+                        raise AdmissionDenied("account_cooldown")
+        return admission
 
     return Services(
         specs=specs,
@@ -307,6 +318,7 @@ def build_real_runtime(*, config, env, clock=time.time, storage=None, timeout=15
             storage=storage,
             rotation=RoundRobin(),
             account_ids=account_ids,
+            accounts=accounts,
         ),
         storage=storage,
     )
