@@ -65,7 +65,13 @@ class AgentFixtureTest(unittest.TestCase):
             self.assertEqual(request({})[0],401)
             auth={'Authorization':'Bearer '+srv.token}
             self.assertEqual(request({**auth,'Origin':'https://evil.invalid'})[0],403)
-            self.assertEqual(request(auth,b'x'*262145)[0],400)
+            # Oversized body: declare the length and send no bytes so the server
+            # rejects from the header alone (writing 256KiB raced with the close).
+            c=http.client.HTTPConnection('127.0.0.1',srv.server_port,timeout=2)
+            try:
+                c.request('POST','/v1/chat/completions',b'',{**auth,'Content-Length':'262145'});r=c.getresponse();r.read()
+                self.assertEqual(r.status,400)
+            finally:c.close()
             self.assertEqual(request(auth,b'{')[0],400)
             self.assertEqual(request(auth,path='/v1/responses')[0],404)
             status,body=request(auth);self.assertEqual(status,200);self.assertIn(b'data: [DONE]',body)
