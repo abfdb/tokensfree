@@ -208,3 +208,22 @@ def test_malformed_tool_calls_are_invalid_response(json_upstream):
     with pytest.raises(NormalizedError) as caught:
         asyncio.run(adapter.complete(request(), admission()))
     assert caught.value.code == "invalid_response"
+
+
+
+def test_sampling_parameters_are_forwarded(json_upstream):
+    adapter = OpenAICompatAdapter(base_url(json_upstream), KEY)
+    request_with_params = request(
+        temperature=0.2,
+        top_p=0.9,
+        stop=("END",),
+        seed=7,
+        response_format={"type": "json_object"},
+    )
+    asyncio.run(adapter.complete(request_with_params, admission()))
+    sent = json_upstream.requests[-1]
+    assert sent["temperature"] == 0.2
+    assert sent["top_p"] == 0.9
+    assert sent["stop"] == ["END"]
+    assert sent["seed"] == 7
+    assert sent["response_format"] == {"type": "json_object"}

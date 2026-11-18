@@ -84,6 +84,16 @@ class OpenAICompatAdapter:
             payload["tools"] = [dict(tool) for tool in request.tools]
         if request.tool_choice is not None:
             payload["tool_choice"] = request.tool_choice
+        if request.temperature is not None:
+            payload["temperature"] = request.temperature
+        if request.top_p is not None:
+            payload["top_p"] = request.top_p
+        if request.stop:
+            payload["stop"] = list(request.stop)
+        if request.seed is not None:
+            payload["seed"] = request.seed
+        if request.response_format is not None:
+            payload["response_format"] = dict(request.response_format)
         return json.dumps(payload).encode("utf-8")
 
     def _connect(self):

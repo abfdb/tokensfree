@@ -183,3 +183,76 @@ def test_non_string_roles_are_rejected_without_a_type_error(role):
 
     with pytest.raises(RequestRejected):
         parse_chat_payload(payload(messages=[{"role": role, "content": "hi"}]))
+
+
+
+def test_sampling_parameters_are_kept():
+    parsed = parse_chat_payload(
+        payload(
+            temperature=0.2,
+            top_p=0.9,
+            stop=["END", "STOP"],
+            seed=7,
+            response_format={"type": "json_object"},
+        )
+    )
+    assert parsed.request.temperature == 0.2
+    assert parsed.request.top_p == 0.9
+    assert parsed.request.stop == ("END", "STOP")
+    assert parsed.request.seed == 7
+    assert parsed.request.response_format == {"type": "json_object"}
+
+
+def test_single_stop_string_is_normalized():
+    parsed = parse_chat_payload(payload(stop="END"))
+    assert parsed.request.stop == ("END",)
+
+
+def test_json_schema_response_format_is_kept():
+    parsed = parse_chat_payload(
+        payload(response_format={"type": "json_schema", "json_schema": {"name": "answer", "schema": {"type": "object"}}})
+    )
+    assert parsed.request.response_format["json_schema"]["name"] == "answer"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"temperature": -0.1},
+        {"temperature": 2.1},
+        {"temperature": "0.5"},
+        {"temperature": True},
+        {"top_p": 1.5},
+        {"top_p": -0.1},
+        {"stop": []},
+        {"stop": ["a", "b", "c", "d", "e"]},
+        {"stop": [1]},
+        {"stop": ""},
+        {"seed": -1},
+        {"seed": 1.5},
+        {"seed": True},
+        {"response_format": "json"},
+        {"response_format": {"type": "bogus"}},
+        {"response_format": {"type": "json_schema"}},
+        {"response_format": {"type": "json_schema", "json_schema": {"name": ""}}},
+    ],
+)
+def test_invalid_sampling_parameters_are_rejected(overrides):
+    from tokensfree.edge.protocol import RequestRejected
+
+    with pytest.raises(RequestRejected):
+        parse_chat_payload(payload(**overrides))
+
+
+def test_n_greater_than_one_is_unsupported():
+    from tokensfree.edge.protocol import RequestRejected
+
+    with pytest.raises(RequestRejected) as caught:
+        parse_chat_payload(payload(n=2))
+    assert caught.value.code.value == "unsupported_capability"
+    parsed = parse_chat_payload(payload(n=1))
+    assert parsed.request.model == base_model()
+
+
+def base_model():
+    return "tokensfree-auto"

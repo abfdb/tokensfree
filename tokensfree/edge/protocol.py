@@ -105,6 +105,49 @@ def _parse_messages(messages, developer_role_policy, max_messages, max_content_c
     return tuple(normalized), needs_tools
 
 
+def _optional_number(payload, key, minimum, maximum):
+    value = payload.get(key)
+    if value is None:
+        return None
+    if type(value) is not int and type(value) is not float:
+        _reject()
+    if not minimum <= float(value) <= maximum:
+        _reject()
+    return float(value)
+
+
+def _parse_stop(value):
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        candidates = [value]
+    elif isinstance(value, list) and 1 <= len(value) <= 4:
+        candidates = value
+    else:
+        _reject()
+    for candidate in candidates:
+        if not isinstance(candidate, str) or not 1 <= len(candidate) <= 64:
+            _reject()
+    return tuple(candidates)
+
+
+def _parse_response_format(value):
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        _reject()
+    kind = value.get("type")
+    if kind not in ("text", "json_object", "json_schema"):
+        _reject()
+    if kind == "json_schema":
+        schema = value.get("json_schema")
+        if not isinstance(schema, dict):
+            _reject()
+        if not isinstance(schema.get("name"), str) or not schema["name"]:
+            _reject()
+    return dict(value)
+
+
 def parse_chat_payload(payload, *, developer_role_policy="map", max_messages=32, max_content_chars=4000):
     if not isinstance(payload, dict):
         _reject()
@@ -127,6 +170,15 @@ def parse_chat_payload(payload, *, developer_role_policy="map", max_messages=32,
         tools = tuple(tools)
     else:
         tools = ()
+    if "n" in payload and not (type(payload["n"]) is int and payload["n"] == 1):
+        raise RequestRejected(ErrorCode.unsupported_capability)
+    temperature = _optional_number(payload, "temperature", 0.0, 2.0)
+    top_p = _optional_number(payload, "top_p", 0.0, 1.0)
+    stop = _parse_stop(payload.get("stop"))
+    seed = payload.get("seed")
+    if seed is not None and (type(seed) is not int or not 0 <= seed <= 2 ** 31 - 1):
+        _reject()
+    response_format = _parse_response_format(payload.get("response_format"))
     tool_choice = payload.get("tool_choice")
     if tool_choice is not None:
         if isinstance(tool_choice, str):
@@ -153,6 +205,11 @@ def parse_chat_payload(payload, *, developer_role_policy="map", max_messages=32,
         stream=stream,
         tools=tools,
         tool_choice=tool_choice,
+        temperature=temperature,
+        top_p=top_p,
+        stop=stop,
+        seed=seed,
+        response_format=response_format,
     )
     return ParsedChat(request=request, stream=stream, requires_tools=requires_tools, capabilities=frozenset(capabilities))
 

@@ -102,6 +102,16 @@ class LoopbackStreamingAdapter:
             payload["tools"] = [dict(tool) for tool in request.tools]
         if request.tool_choice is not None:
             payload["tool_choice"] = request.tool_choice
+        if request.temperature is not None:
+            payload["temperature"] = request.temperature
+        if request.top_p is not None:
+            payload["top_p"] = request.top_p
+        if request.stop:
+            payload["stop"] = list(request.stop)
+        if request.seed is not None:
+            payload["seed"] = request.seed
+        if request.response_format is not None:
+            payload["response_format"] = dict(request.response_format)
         body = json.dumps(payload).encode("utf-8")
         iterator = self.transport.iter_lines(body)
         sentinel = object()

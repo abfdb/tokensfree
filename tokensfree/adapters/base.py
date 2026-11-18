@@ -20,6 +20,11 @@ class ChatRequest:
     stream: bool = False
     tools: tuple = ()
     tool_choice: Any = None
+    temperature: float | None = None
+    top_p: float | None = None
+    stop: tuple = ()
+    seed: int | None = None
+    response_format: dict | None = None
 
 
 @dataclass(frozen=True)

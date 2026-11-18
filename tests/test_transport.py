@@ -165,3 +165,32 @@ def test_stream_deadline_stops_a_dripping_upstream(dripping_upstream):
         list(transport.iter_lines(b"{}"))
     assert caught.value.code == "timeout"
     assert caught.value.retryable is True
+
+
+
+def test_streaming_adapter_forwards_sampling_parameters():
+    from tokensfree.adapters.base import Admission, ChatRequest, _ADMISSION_TOKEN
+
+    transport = RecordingTransport()
+    adapter = LoopbackStreamingAdapter(1234, transport=transport)
+    admission = Admission(provider="loopback", capabilities=frozenset({"text", "stream"}), simulation=True, _token=_ADMISSION_TOKEN)
+    request_with_params = ChatRequest(
+        model="fixture-model",
+        messages=({"role": "user", "content": "x"},),
+        temperature=0.3,
+        top_p=0.8,
+        stop=("END",),
+        seed=11,
+        response_format={"type": "json_object"},
+    )
+
+    async def run_all():
+        return [event async for event in adapter.stream(request_with_params, admission)]
+
+    asyncio.run(run_all())
+    sent = transport.bodies[0]
+    assert sent["temperature"] == 0.3
+    assert sent["top_p"] == 0.8
+    assert sent["stop"] == ["END"]
+    assert sent["seed"] == 11
+    assert sent["response_format"] == {"type": "json_object"}
