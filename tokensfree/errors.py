@@ -22,6 +22,11 @@ class ErrorCode(str, Enum):
     idempotency_capacity = "idempotency_capacity"
     refusal = "refusal"
     payload_too_large = "payload_too_large"
+    upstream_auth_failed = "upstream_auth_failed"
+    upstream_rate_limited = "upstream_rate_limited"
+    upstream_error = "upstream_error"
+    upstream_timeout = "upstream_timeout"
+    upstream_disconnected = "upstream_disconnected"
     internal_error = "internal_error"
 
 
@@ -40,6 +45,11 @@ ERROR_TABLE = {
     ErrorCode.idempotency_capacity: (503, True),
     ErrorCode.refusal: (422, False),
     ErrorCode.payload_too_large: (413, False),
+    ErrorCode.upstream_auth_failed: (502, False),
+    ErrorCode.upstream_rate_limited: (429, True),
+    ErrorCode.upstream_error: (502, True),
+    ErrorCode.upstream_timeout: (504, True),
+    ErrorCode.upstream_disconnected: (502, False),
     ErrorCode.internal_error: (500, True),
 }
 
@@ -57,6 +67,11 @@ DEFAULT_MESSAGES = {
     ErrorCode.idempotency_capacity: "去重缓存已满，请等待旧记录到期。请求未执行。",
     ErrorCode.refusal: "上游安全拒绝：停止，不通过切换规避。",
     ErrorCode.payload_too_large: "请求体超出允许的大小。",
+    ErrorCode.upstream_auth_failed: "上游凭证失效。",
+    ErrorCode.upstream_rate_limited: "上游限流，请稍后重试。",
+    ErrorCode.upstream_error: "上游服务错误。",
+    ErrorCode.upstream_timeout: "上游响应超时。",
+    ErrorCode.upstream_disconnected: "上游流在传输中断开。",
     ErrorCode.internal_error: "内部错误。",
 }
 
