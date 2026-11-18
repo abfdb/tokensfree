@@ -93,3 +93,13 @@ def test_status_reports_the_restored_breaker(storage):
     )
     payload = json.loads(response.body)
     assert payload["breakers"]["mock-alpha"]["state"] == "open"
+
+
+
+def test_clean_success_does_not_rewrite_health():
+    saves = []
+    breaker = CircuitBreaker()
+    breaker.watch(lambda changed: saves.append(changed.state))
+    breaker.record_success(100)
+    breaker.record_success(101)
+    assert saves == []

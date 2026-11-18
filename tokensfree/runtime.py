@@ -3,6 +3,7 @@
 Turns configuration plus adapter instances into the Services the edge core needs.
 Opening a socket and serving HTTP stay outside this module.
 """
+import hashlib
 import pathlib
 import time
 from dataclasses import dataclass
@@ -239,14 +240,11 @@ def real_specs_from_env(env, *, clock=time.time):
     base_missing = [
         key for key in REAL_ENV_KEYS if key != "TOKENSFREE_REAL_API_KEY" and not str(env.get(key, "")).strip()
     ]
-    keys_missing = not (
-        str(env.get("TOKENSFREE_REAL_API_KEY", "")).strip()
-        or str(env.get("TOKENSFREE_REAL_API_KEYS", "")).strip()
-    )
+    keys_missing = not any(str(env.get(name, "")).strip() for name in KEY_SOURCE_VARS)
     if base_missing or keys_missing:
         names = list(base_missing)
         if keys_missing:
-            names.append("TOKENSFREE_REAL_API_KEY (or TOKENSFREE_REAL_API_KEYS)")
+            names.append("TOKENSFREE_REAL_API_KEY (or _API_KEYS / _API_KEY_FILE / _API_KEYS_FILE)")
         raise ValueError("missing real-provider environment: " + ", ".join(names))
     keys = real_keys_from_env(env)
     provider = str(env["TOKENSFREE_REAL_PROVIDER"]).strip()
@@ -290,8 +288,6 @@ def build_real_runtime(*, config, env, clock=time.time, storage=None, timeout=15
     account_ids = None
     accounts = getattr(storage, "accounts", None)
     if accounts is not None:
-        import hashlib
-
         account_ids = {}
         for spec, key in zip(specs, keys):
             fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()

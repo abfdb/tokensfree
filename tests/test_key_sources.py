@@ -7,6 +7,10 @@ from test_multi_key import CONFIG_ON, KEY_ONE, KEY_TWO, MODEL, PROVIDER, KeyAwar
 from tokensfree.edge.app_core import handle_chat
 from tokensfree.router.scheduling import RoundRobin
 from tokensfree.runtime import build_real_runtime, real_keys_from_env
+from upstream_support import JsonUpstream
+
+OK_BODY = '{"choices":[{"index":0,"message":{"role":"assistant","content":"from file key"},"finish_reason":"stop"}],"usage":{"total_tokens":2}}'
+FILE_KEY = "file-key-0100"
 
 
 def test_round_robin_orders():
@@ -59,3 +63,42 @@ def test_rotation_spreads_first_attempts_across_keys():
         assert len(key_two_calls) == 2
     finally:
         upstream.stop()
+
+
+
+def test_build_real_runtime_accepts_a_key_file(tmp_path):
+    key_path = tmp_path / "zhipu.key"
+    key_path.write_text(FILE_KEY + "\n", encoding="utf-8")
+    upstream = JsonUpstream(OK_BODY)
+    upstream.start()
+    try:
+        env = env_for(upstream.port, None)
+        env.pop("TOKENSFREE_REAL_API_KEY", None)
+        env["TOKENSFREE_REAL_API_KEY_FILE"] = str(key_path)
+        runtime = build_real_runtime(config=CONFIG_ON, env=env, clock=lambda: 1000.0)
+        assert [spec.name for spec in runtime.services.specs] == [PROVIDER]
+        outcome = asyncio.run(
+            handle_chat(
+                {"model": MODEL, "messages": [{"role": "user", "content": "hi"}]},
+                services=runtime.services,
+                request_id="req-file",
+            )
+        )
+        assert outcome.status == 200
+        assert outcome.body["choices"][0]["message"]["content"] == "from file key"
+    finally:
+        upstream.stop()
+
+
+def test_missing_key_source_names_the_file_variants():
+    env = {
+        "TOKENSFREE_REAL_PROVIDER": PROVIDER,
+        "TOKENSFREE_REAL_BASE_URL": "https://example.invalid/v1",
+        "TOKENSFREE_REAL_MODEL": MODEL,
+        "TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT": "2000",
+    }
+    with pytest.raises(ValueError) as caught:
+        build_real_runtime(config=CONFIG_ON, env=env, clock=lambda: 1000.0)
+    message = str(caught.value)
+    assert "TOKENSFREE_REAL_API_KEY" in message
+    assert "_API_KEY_FILE" in message

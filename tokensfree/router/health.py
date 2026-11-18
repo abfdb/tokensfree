@@ -87,14 +87,15 @@ class CircuitBreaker:
 
     def record_success(self, now):
         # A success starts a fresh accounting window: earlier failures stop counting.
+        had_failures = self._fail_streak > 0 or self._window_fails > 0
+        was_closed = self._state == "closed"
         self._window_start = now
         self._window_fails = 0
-        was_closed = self._state == "closed"
         self._state = "closed"
         self._fail_streak = 0
         self._open_until = None
         self._probe_in_flight = False
-        if not was_closed or self._window_fails == 0:
+        if not was_closed or had_failures:
             self._changed()
 
     def record_failure(self, now):
