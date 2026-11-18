@@ -54,24 +54,33 @@ def parse_chunk(data):
     )
 
 
+def parse_data_line(line):
+    """Parse one SSE line. Returns StreamEvent or None for frames we ignore."""
+    line = line.strip()
+    if not line or line.startswith(":"):
+        return None
+    if not line.startswith("data:"):
+        return None
+    payload = line[len("data:"):].strip()
+    if len(payload) > MAX_LINE_CHARS:
+        _invalid()
+    if payload == "[DONE]":
+        return StreamEvent("done")
+    try:
+        data = json.loads(payload)
+    except (ValueError, RecursionError):
+        _invalid()
+    return parse_chunk(data)
+
+
 def iter_sse_events(text):
     """Yield StreamEvent for each data frame; stop after [DONE]."""
     if not isinstance(text, str):
         raise TypeError("text must be a str")
     for raw in text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith(":"):
+        event = parse_data_line(raw)
+        if event is None:
             continue
-        if not line.startswith("data:"):
-            continue
-        payload = line[len("data:"):].strip()
-        if len(payload) > MAX_LINE_CHARS:
-            _invalid()
-        if payload == "[DONE]":
-            yield StreamEvent("done")
+        yield event
+        if event.kind == "done":
             return
-        try:
-            data = json.loads(payload)
-        except (ValueError, RecursionError):
-            _invalid()
-        yield parse_chunk(data)
