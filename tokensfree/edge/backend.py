@@ -11,7 +11,7 @@ from dataclasses import dataclass, replace
 
 from tokensfree import __version__
 
-from tokensfree.edge.app_core import breaker_lookup, handle_chat
+from tokensfree.edge.app_core import account_failure_hook, breaker_lookup, handle_chat
 from tokensfree.edge.auth import bearer_token, origin_allowed, token_matches
 from tokensfree.edge.models import models_payload
 from tokensfree.edge.protocol import build_error
@@ -117,7 +117,12 @@ class MemoryBackend:
             if isinstance(plan, StreamFailure):
                 return self._json(plan.status, plan.body)
             headers = {"content-type": SSE_TYPE, **BASE_HEADERS}
-            stream = iter_frames(plan, admit=self.services.admit, breaker_for=breaker_lookup(self.services))
+            stream = iter_frames(
+                plan,
+                admit=self.services.admit,
+                breaker_for=breaker_lookup(self.services),
+                on_error=account_failure_hook(self.services, request_id),
+            )
             return EdgeResponse(status=200, headers=headers, stream=stream)
         outcome = await handle_chat(
             payload,

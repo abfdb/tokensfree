@@ -114,6 +114,7 @@ def build_services(*, config, specs, adapters, authorized, clock=time.time, stor
         breakers=breakers,
         rotation=rotation,
         account_ids=account_ids,
+        accounts=getattr(storage, "accounts", None),
     )
 
 

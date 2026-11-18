@@ -13,7 +13,7 @@ from tokensfree.edge.protocol import RequestRejected, build_error, parse_chat_pa
 from tokensfree.errors import ErrorCode
 from tokensfree.router.admission import AdmissionDenied
 from tokensfree.router.candidates import build_candidates, specs_for_model
-from tokensfree.router.execute import NoProviderAvailable
+from tokensfree.router.execute import ACCOUNT_SCOPED_ERRORS, NoProviderAvailable
 from tokensfree.sse import SseEncoder
 
 
@@ -63,7 +63,7 @@ def prepare_stream(payload, *, services, request_id, developer_role_policy="map"
     return StreamPlan(parsed=parsed, candidates=tuple(candidates), request_id=request_id)
 
 
-async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=time.time):
+async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=time.time, on_error=None):
     """Yield response bytes. Raises NormalizedError or NoProviderAvailable.
 
     An open circuit skips its candidate without opening an upstream connection.
@@ -143,12 +143,17 @@ async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=ti
         except NormalizedError as error:
             if breaker is not None:
                 breaker.record_failure(clock())
+            error.provider = spec.name
+            if on_error is not None:
+                on_error(spec, error)
             if emitted:
                 yield encoder.error(error.code)
                 return
             trace.append((spec.name, error.code))
             last_error = error
-            if not error.retryable or len(trace) >= max_attempts:
+            if len(trace) >= max_attempts:
+                raise
+            if not error.retryable and error.code not in ACCOUNT_SCOPED_ERRORS:
                 raise
             continue
         # The adapter's stream ended without finish/[DONE]: treat it as truncated,

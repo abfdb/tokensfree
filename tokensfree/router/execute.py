@@ -12,6 +12,9 @@ from dataclasses import dataclass
 from tokensfree.adapters.base import NormalizedError
 from tokensfree.router.admission import AdmissionDenied
 
+# Errors that say "this account cannot serve right now" but leave other candidates usable.
+ACCOUNT_SCOPED_ERRORS = frozenset({"auth_invalid", "quota_exhausted", "rate_limited"})
+
 
 class NoProviderAvailable(Exception):
     """No candidate could be admitted and attempted within budget."""
@@ -34,7 +37,7 @@ class Execution:
     attempts: tuple
 
 
-async def execute(candidates, *, admit, request, max_attempts=2, first_byte_sent=None, breaker_for=None, clock=time.time):
+async def execute(candidates, *, admit, request, max_attempts=2, first_byte_sent=None, breaker_for=None, clock=time.time, on_error=None):
     """Try candidates in order. Raises the last NormalizedError or NoProviderAvailable.
 
     breaker_for(spec) may return a CircuitBreaker: an open circuit skips the
@@ -61,10 +64,17 @@ async def execute(candidates, *, admit, request, max_attempts=2, first_byte_sent
         except NormalizedError as error:
             if breaker is not None:
                 breaker.record_failure(clock())
+            # Attribute the failure to the provider spec (multi-key needs the exact key),
+            # not to the generic adapter name.
+            error.provider = candidate.spec.name
+            if on_error is not None:
+                on_error(candidate.spec, error)
             trace.append((candidate.spec.name, error.code))
             last_error = error
             streaming_started = first_byte_sent is not None and first_byte_sent()
-            if not error.retryable or streaming_started or len(trace) >= max_attempts:
+            if streaming_started or len(trace) >= max_attempts:
+                raise
+            if not error.retryable and error.code not in ACCOUNT_SCOPED_ERRORS:
                 raise
             continue
         if breaker is not None:

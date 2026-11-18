@@ -51,14 +51,33 @@ def test_retryable_error_falls_back_to_next_candidate():
     assert [attempt[1] for attempt in execution.attempts] == ["rate_limited", "success"]
 
 
-def test_non_retryable_error_is_final():
+def test_content_scoped_error_is_final():
     candidates = [
-        Candidate(spec("alpha"), FakeAdapter([NormalizedError("auth_invalid", retryable=False)])),
+        Candidate(spec("alpha"), FakeAdapter([NormalizedError("refusal", retryable=False)])),
         Candidate(spec("beta"), FakeAdapter(["never"])),
     ]
     with pytest.raises(NormalizedError) as caught:
         run(candidates)
-    assert caught.value.code == "auth_invalid"
+    assert caught.value.code == "refusal"
+    assert candidates[1].adapter.calls == 0
+
+
+@pytest.mark.parametrize("code", ["auth_invalid", "quota_exhausted"])
+def test_account_scoped_error_falls_through_to_the_next_account(code):
+    candidates = [
+        Candidate(spec("alpha"), FakeAdapter([NormalizedError(code, retryable=False)])),
+        Candidate(spec("beta"), FakeAdapter(["hello"])),
+    ]
+    execution = run(candidates)
+    assert execution.provider == "beta"
+    assert execution.attempts[0] == ("alpha", code)
+
+
+def test_failure_is_attributed_to_the_provider_spec():
+    candidates = [Candidate(spec("alpha"), FakeAdapter([NormalizedError("auth_invalid", retryable=False)]))]
+    with pytest.raises(NormalizedError) as caught:
+        run(candidates)
+    assert caught.value.provider == "alpha"
 
 
 def test_admission_denied_is_skipped_without_calling_adapter():

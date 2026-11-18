@@ -35,6 +35,7 @@ class Services:
     breakers: object = None
     rotation: object = None
     account_ids: object = None
+    accounts: object = None
 
 
 @dataclass(frozen=True)
@@ -114,7 +115,11 @@ async def _execute(payload, *, services, request_id, developer_role_policy):
         enriched = rotation.order(enriched)
     try:
         execution = await execute(
-            enriched, admit=services.admit, request=parsed.request, breaker_for=breaker_lookup(services)
+            enriched,
+            admit=services.admit,
+            request=parsed.request,
+            breaker_for=breaker_lookup(services),
+            on_error=account_failure_hook(services, request_id),
         )
     except NormalizedError as error:
         return _failed(map_upstream_error(error), request_id, provider=error.provider or None)
@@ -132,6 +137,31 @@ async def _execute(payload, *, services, request_id, developer_role_policy):
         tool_calls=getattr(execution.result, "tool_calls", ()),
     )
     return ChatOutcome(status=200, body=body, request_id=request_id, provider=execution.provider)
+
+
+def mark_account_failure(services, error, *, request_id):
+    """Persist what an account-scoped upstream failure told us about that account."""
+    account = account_for(services, error.provider)
+    if account is None:
+        return
+    accounts = getattr(services, "accounts", None)
+    if error.code == "quota_exhausted" and services.ledger is not None:
+        services.ledger.platform_signal(
+            account, provider=error.provider, request_id=request_id, detail="quota_exhausted"
+        )
+    elif error.code == "auth_invalid" and accounts is not None:
+        accounts.set_status(account, "invalid")
+    elif error.code == "rate_limited" and accounts is not None and error.retry_after_s:
+        accounts.set_cooldown(account, time.time() + float(error.retry_after_s))
+
+
+def account_failure_hook(services, request_id):
+    """Per-attempt hook: persist account-scoped failures even if a later candidate serves."""
+
+    def hook(spec, error):
+        mark_account_failure(services, error, request_id=request_id)
+
+    return hook
 
 
 def account_for(services, provider):
