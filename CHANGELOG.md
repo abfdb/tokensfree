@@ -22,6 +22,7 @@
 - SSE 编码器 / 解析器 / 工具增量装配（`sse.py`、`adapters/stream_parse.py`）
 - 流式核心：首帧前可回退、首帧后错误终态、断流必有终态帧（`edge/stream_core.py`）
 - HTTP 后端契约、ASGI 适配器、可运行的 stdlib asyncio host（`edge/backend.py` / `asgi.py` / `host.py`）
+- 结构化访问日志（每请求一行，无 prompt）与 `x-request-id` 响应头
 - 真实调用闸门：开关 + 授权 + 未过期免费证据三者同时成立才放行（默认关闭）
 
 **上游适配器**

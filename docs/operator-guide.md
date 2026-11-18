@@ -62,6 +62,17 @@ $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
 
 令牌不是供应商 API Key；不要写进日志、Git 或聊天。
 
+### 请求日志
+
+每个请求向 stderr 打印一行结构化 JSON（不含 prompt 与回复内容）：
+
+```json
+{"ts": 1700000000.123, "level": "info", "event": "http_request", "method": "POST",
+ "path": "/v1/chat/completions", "latency_ms": 12, "status": 200, "request_id": "req-..."}
+```
+
+每个响应都带 `x-request-id` 头，排障时把该头的值报给日志即可精确定位。
+
 ### 运维状态
 
 `GET /api/status` 返回当前运行时的真实状态：

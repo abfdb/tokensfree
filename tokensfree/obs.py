@@ -11,6 +11,7 @@ import time
 ALLOWED_FIELDS = frozenset({
     "event", "request_id", "client_id", "provider", "account_id", "outcome",
     "latency_ms", "error_code", "bytes_in", "bytes_out", "level",
+    "method", "path", "status",
 })
 
 _LEVELS = {"debug": 10, "info": 20, "warn": 30, "error": 40}

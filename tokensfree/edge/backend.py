@@ -6,7 +6,7 @@ MemoryBackend is the reference implementation the contract tests run against.
 """
 import json
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from tokensfree.edge.app_core import breaker_lookup, handle_chat
 from tokensfree.edge.auth import bearer_token, origin_allowed, token_matches
@@ -125,6 +125,14 @@ class MemoryBackend:
         if not isinstance(request, EdgeRequest):
             raise TypeError("request must be an EdgeRequest")
         request_id = "req-" + uuid.uuid4().hex
+        response = await self._dispatch(request, request_id)
+        headers = dict(response.headers)
+        headers.setdefault("x-request-id", request_id)
+        return replace(response, headers=headers)
+
+    async def _dispatch(self, request, request_id):
+        if not isinstance(request, EdgeRequest):
+            raise TypeError("request must be an EdgeRequest")
         if not self._host_allowed(request):
             return self._error(ErrorCode.origin_rejected, request_id)
         route = resolve(request.method, request.path)
