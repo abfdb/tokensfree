@@ -60,7 +60,7 @@ print(json.load(urllib.request.urlopen(req)))
 | `errors.py` | 稳定错误码契约（客户端唯一可见的错误形状） |
 | `obs.py` | 白名单结构化日志 + Bearer 脱敏 |
 | `adapters/base.py` | 适配器契约、上游错误归一化、不可伪造的 `Admission` |
-| `adapters/loopback.py` / `transport.py` | 本地假上游的异步适配器与 stdlib SSE 传输 |
+| `adapters/loopback.py` / `transport.py` / `openai_compat.py` | 本地假上游的异步适配器与 stdlib SSE 传输 |
 | `adapters/stream_parse.py` | 上游 SSE 严格解析（畸形帧必须失败，不静默丢帧） |
 | `router/candidates.py` / `admission.py` / `execute.py` / `scheduling.py` / `account_pool.py` / `health.py` | 纯函数候选、唯一准入闸门、有界尝试（首字节后不换供应商） |
 | `sse.py` | 客户端 SSE 帧编码 + 工具调用增量装配 |
@@ -120,7 +120,7 @@ python check_dsh_contract.py # 329 项契约矩阵，退出 0 表示拒绝行为
 | 阶段 | 状态 |
 |---|---|
 | P0 工程基线：CI（三平台 × 3 个 Python 版本）、统一错误契约、结构化日志、契约矩阵可注入 | ✅ 完成 |
-| P1 内核：配置 / 适配器契约 / 候选 / 准入闸门 / loopback 适配器 | ✅ 完成（真实适配器等 D2） |
+| P1 内核：配置 / 适配器契约 / 候选 / 准入闸门 / loopback 适配器 / OpenAI 兼容适配器（默认禁用） | ✅ 完成（真实调用等 D2） |
 | P2 协议：SSE 编码与解析 / 工具增量装配 / 流式核心 / 上游传输 | ✅ 完成（HTTP 服务端边缘等 D1） |
 | P3 持久化：迁移 / 幂等 / 只增账本 / 事件（已接入请求链路） | ✅ 完成 |
 | P1 6–7：HTTP 边缘 + 双实现契约对照 | ⛔ 等 D1 |

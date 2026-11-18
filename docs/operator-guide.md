@@ -87,7 +87,7 @@ TOKENSFREE_DSH_SMOKE=1 .venv\Scripts\python -m pytest tests/test_dsh_smoke_gate.
 
 ## 6. 已知限制（诚实清单）
 
-- **没有真实供应商**：所有上游都是 mock 或本地假 fixture（等 D2）
+- **没有启用真实供应商**：`adapters/openai_compat.py` 已实现（含密钥不落日志、拒绝明文远程、默认禁用），但真实调用仍被准入闸门硬阻断，等 D2 决定首家供应商
 - **没有系统凭据库**：keyring 绑定未实现（等 D2）
 - **零外发证明**：Windows 无 Linux 网络命名空间；当前靠"只配置 loopback baseURL + 断言"保证
 - **无服务器框架选型**：当前 stdlib host 已能跑 DSH；D1 只影响托管方式

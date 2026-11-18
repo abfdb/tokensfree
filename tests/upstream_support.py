@@ -2,6 +2,7 @@
 
 Not a test module: tests import SSEUpstream and configure status/body per case.
 """
+import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -67,3 +68,65 @@ class SSEUpstream:
         self._server.server_close()
         if self._thread is not None:
             self._thread.join(10)
+
+
+class JsonUpstream:
+    """Configurable JSON upstream that records request bodies (never logs prompt text)."""
+
+    def __init__(self, body, *, status=200, content_type="application/json"):
+        self.body = body
+        self.status = status
+        self.content_type = content_type
+        self.requests = []
+        self.headers = {}
+        self.response_headers = {}
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), _make_json_handler(self))
+        self._thread = None
+
+    @property
+    def port(self):
+        return self._server.server_port
+
+    def configure(self, *, body=None, status=None, content_type=None):
+        if body is not None:
+            self.body = body
+        if status is not None:
+            self.status = status
+        if content_type is not None:
+            self.content_type = content_type
+
+    def start(self):
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+        self._thread.start()
+        return self.port
+
+    def stop(self):
+        self._server.shutdown()
+        self._server.server_close()
+        if self._thread is not None:
+            self._thread.join(10)
+
+
+def _make_json_handler(owner):
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length)
+            try:
+                owner.requests.append(json.loads(raw.decode("utf-8")))
+            except ValueError:
+                owner.requests.append({})
+            owner.headers = dict(self.headers.items())
+            payload = owner.body.encode()
+            self.send_response(owner.status)
+            self.send_header("Content-Type", owner.content_type)
+            self.send_header("Content-Length", str(len(payload)))
+            for name, value in owner.response_headers.items():
+                self.send_header(name, value)
+            self.end_headers()
+            self.wfile.write(payload)
+
+    return Handler
