@@ -80,6 +80,7 @@ $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
 ```json
 {"version": "0.6.0", "uptime_s": 12.3, "simulation": true,
  "persistence": {"idempotency": true, "ledger": true, "events": true},
+ "accounts": [{"provider": "zhipu", "status": "active", "cooldown_until": null, "requests_charged": 12}],
  "breakers": {"provider-a": {"state": "open", "fail_streak": 3, "window_fails": 3, "open_until": 1700000000.0}},
  "providers": [{"name": "mock-alpha", "state": "eligible", "policy_reason": "admitted"}]}
 ```

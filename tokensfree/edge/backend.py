@@ -98,12 +98,34 @@ class MemoryBackend:
                 breakers[str(name)] = snapshot()
             except Exception:
                 breakers[str(name)] = {"state": "unknown"}
+        accounts = []
+        account_ids = getattr(self.services, "account_ids", None) or {}
+        accounts_repo = getattr(self.services, "accounts", None)
+        for spec in self.services.specs:
+            account_id = account_ids.get(spec.name)
+            if account_id is None or accounts_repo is None:
+                continue
+            row = accounts_repo.get(account_id)
+            if row is None:
+                continue
+            charged = 0
+            if self.services.ledger is not None:
+                charged = int(round(-self.services.ledger.balance(account_id, unit="request")))
+            accounts.append(
+                {
+                    "provider": spec.name,
+                    "status": row["status"],
+                    "cooldown_until": row["cooldown_until"],
+                    "requests_charged": charged,
+                }
+            )
         return {
             "version": __version__,
             "simulation": simulation,
             "uptime_s": round(time.time() - self.started_at, 1),
             "persistence": persistence,
             "breakers": breakers,
+            "accounts": accounts,
             "providers": providers,
         }
 
