@@ -88,8 +88,10 @@ async def _execute(payload, *, services, request_id, developer_role_policy):
     enriched = tuple(
         Candidate(spec=spec, adapter=services.adapters[spec.name])
         for spec in candidates
-        if spec.name in services.adapters
+        if spec.name in services.adapters and hasattr(services.adapters[spec.name], "complete")
     )
+    if candidates and not enriched:
+        return _failed(ErrorCode.unsupported_capability, request_id)
     try:
         execution = await execute(enriched, admit=services.admit, request=parsed.request)
     except NormalizedError as error:

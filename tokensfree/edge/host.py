@@ -217,18 +217,25 @@ def main():
     from tokensfree.config import load_config
     from tokensfree.edge.asgi import make_asgi_app
     from tokensfree.edge.backend import MemoryBackend
-    from tokensfree.runtime import build_mock_runtime
+    from tokensfree.runtime import build_loopback_streaming_runtime, build_mock_runtime
 
     parser = argparse.ArgumentParser(description="Serve the tokensfree ASGI app on loopback")
     parser.add_argument("--port", type=int, default=8766)
+    parser.add_argument("--loopback", type=int, default=None,
+                        help="port of a local SSE fixture upstream; enables streaming instead of the mock runtime")
     args = parser.parse_args()
     config = load_config(os.environ)
     if config.local_token is None:
         raise SystemExit("TOKENSFREE_LOCAL_TOKEN must be set for the new backend")
-    runtime = build_mock_runtime(config=config)
+    if args.loopback is None:
+        runtime = build_mock_runtime(config=config)
+        mode = "mock runtime (no streaming provider)"
+    else:
+        runtime = build_loopback_streaming_runtime(args.loopback, config=config)
+        mode = "loopback streaming runtime -> 127.0.0.1:%d" % args.loopback
     backend = MemoryBackend(config=config, services=runtime.services, port=args.port, token=config.local_token)
     host = AsgiHost(make_asgi_app(backend), port=args.port, max_body=config.max_body_bytes)
-    print("tokensfree ASGI backend: http://127.0.0.1:%d (mock runtime, Ctrl+C to stop)" % args.port, flush=True)
+    print("tokensfree ASGI backend: http://127.0.0.1:%d [%s] (Ctrl+C to stop)" % (args.port, mode), flush=True)
     try:
         asyncio.run(host.run_forever())
     except KeyboardInterrupt:

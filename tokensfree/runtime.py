@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from providers import ProviderSpec
 from tokensfree.adapters.loopback import LoopbackAdapter
+from tokensfree.adapters.transport import LoopbackStreamingAdapter
 from tokensfree.adapters.mock import MockChatAdapter
 from tokensfree.config import AppConfig, load_config
 from tokensfree.edge.app_core import Services
@@ -73,6 +74,22 @@ def build_mock_runtime(*, config=None, clock=time.time, ttl_s=60.0):
             specs=specs,
             adapters=adapters,
             authorized=frozenset({"mock-alpha", "mock-beta"}),
+            clock=clock,
+        ),
+    )
+
+
+def build_loopback_streaming_runtime(port, *, config=None, clock=time.time, ttl_s=60.0, timeout=5.0):
+    """Runtime whose single provider speaks SSE to a local fixture upstream."""
+    config = load_config({}) if config is None else config
+    spec = ProviderSpec("loopback", "fixture-model", "mock_zero_cost", clock() + ttl_s, frozenset({"text", "stream"}))
+    return Runtime(
+        config=config,
+        services=build_services(
+            config=config,
+            specs=(spec,),
+            adapters={"loopback": LoopbackStreamingAdapter(port, timeout=timeout)},
+            authorized=frozenset({"loopback"}),
             clock=clock,
         ),
     )
