@@ -7,3 +7,4 @@ __pycache__/
 *.pem
 node_modules/
 *.log
+.superpowers/
