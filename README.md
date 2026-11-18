@@ -48,15 +48,34 @@ print(json.load(urllib.request.urlopen(req)))
 - 浏览器展示使用文本节点，资源跳转由用户在外部官网操作。资源目录的申请记录仍在浏览器 localStorage，与路由状态不同。
 - 不能用于生产或直接暴露到公网。Python 标准 HTTP 服务不是经过加固的生产服务器。
 
-## 尚未实现
-真实供应商适配器、余额读取、账号授权、系统密钥库、模型能力匹配、持久化、流式输出、工具调用、真实客户端集成、精确 token 计量、GPU 调度、Windows 安装包、后台常驻服务。没有收集用户凭证或真实账户调用测试。付费保护必须在未来结合平台侧硬停止机制验证，不能仅靠本地估算保证零账单。
+## 已实现 / 未实现（截至 2026-11-18）
+
+新内核模块已实现并通过测试，但**尚未接入 HTTP 边缘**（等 D1 选型）：真实供应商适配器与凭证库（等 D2）、DSH 端到端冒烟、账号池调度、Windows 安装包与后台常驻、GPU 调度。当前 `python server.py` 启动的仍是 mock-only 旧实现。
+
+**新内核（`tokensfree/`，零运行时依赖）**
+
+| 模块 | 作用 |
+|---|---|
+| `config.py` | 不可变启动配置，只从显式映射读取 |
+| `errors.py` | 稳定错误码契约（客户端唯一可见的错误形状） |
+| `obs.py` | 白名单结构化日志 + Bearer 脱敏 |
+| `adapters/base.py` | 适配器契约、上游错误归一化、不可伪造的 `Admission` |
+| `adapters/loopback.py` / `transport.py` | 本地假上游的异步适配器与 stdlib SSE 传输 |
+| `adapters/stream_parse.py` | 上游 SSE 严格解析（畸形帧必须失败，不静默丢帧） |
+| `router/candidates.py` / `admission.py` / `execute.py` | 纯函数候选、唯一准入闸门、有界尝试（首字节后不换供应商） |
+| `sse.py` | 客户端 SSE 帧编码 + 工具调用增量装配 |
+| `edge/protocol.py` / `app_core.py` / `stream_core.py` | 框架无关的请求解析、应用核心、流式核心 |
+| `runtime.py` | 把配置与适配器装配成可运行的服务依赖 |
+| `store/` | SQLite 迁移、幂等键、只增账本、脱敏事件（已接入请求链路） |
+
+> 新内核的验证：`python -m pytest -q` 共 246 项（含 5 个端到端用例：真实本地 HTTP 假上游 → 传输 → 解析 → 流式核心 → 客户端帧）。
 
 ## 验证
 
 ```sh
 python -m pip install -r requirements-dev.txt
 python -m ruff check .
-python -m pytest -q          # 119 项，Windows/macOS/Linux 三平台一致
+python -m pytest -q          # 246 项，Windows/macOS/Linux 三平台一致
 python check_dsh_contract.py # 8 项契约矩阵，退出 0 表示拒绝行为符合预期
 ```
 
@@ -67,11 +86,13 @@ python check_dsh_contract.py # 8 项契约矩阵，退出 0 表示拒绝行为�
 | 阶段 | 状态 |
 |---|---|
 | P0 工程基线：CI（三平台 × 3 个 Python 版本）、统一错误契约、结构化日志、契约矩阵可注入 | ✅ 完成 |
-| P1 新内核 + 真实适配器（默认关闭） | ⬜ 未开始 |
-| P2 SSE + 工具调用 + DSH 闭环（MVP 完成线） | ⬜ 未开始 |
-| P3–P5 账号池 / 额度账本 / 并发 / 服务化 | ⬜ 未开始 |
+| P1 内核：配置 / 适配器契约 / 候选 / 准入闸门 / loopback 适配器 | ✅ 完成（真实适配器等 D2） |
+| P2 协议：SSE 编码与解析 / 工具增量装配 / 流式核心 / 上游传输 | ✅ 完成（HTTP 服务端边缘等 D1） |
+| P3 持久化：迁移 / 幂等 / 只增账本 / 事件（已接入请求链路） | ✅ 完成 |
+| P1 6–7：HTTP 边缘 + 双实现契约对照 | ⛔ 等 D1 |
+| 真实供应商 / 凭证库 / DSH 冒烟 | ⛔ 等 D2 与边缘层 |
 
-设计见 [docs/superpowers/specs/](docs/superpowers/specs/)，计划见 [docs/superpowers/plans/](docs/superpowers/plans/)。JS 通过 `node --check static/app.js`。真实供应商接入、SSE 与工具调用仍未实现。
+设计见 [docs/superpowers/specs/](docs/superpowers/specs/)，计划见 [docs/superpowers/plans/](docs/superpowers/plans/)（P0、P1、P2）。JS 通过 `node --check static/app.js`。旧 `server.py` 仍是 mock-only 实现；新内核尚未接入 HTTP。
 
 ## 项目结构
 `server.py` 路由与本地服务；`test_gateway.py` 自动测试；`static/` 极客控制台；`static/catalog/` 资源目录。运行状态不会写入源码。`package.json` 仅供开发预览，无 npm 依赖。
