@@ -50,6 +50,12 @@ class Storage:
     def open(cls, path=":memory:"):
         if not isinstance(path, str) or not path:
             raise ValueError("path must be a non-empty string")
+        if path != ":memory:":
+            expanded = pathlib.Path(path).expanduser()
+            parent = expanded.parent
+            if str(parent):
+                parent.mkdir(parents=True, exist_ok=True)
+            path = str(expanded)
         connection = connect(path)
         migrate(connection)
         return cls(

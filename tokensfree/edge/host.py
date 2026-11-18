@@ -6,6 +6,7 @@ streaming responses, bounded sizes, no keep-alive.
 """
 import asyncio
 import json
+import sqlite3
 
 from tokensfree.edge.protocol import build_error
 from tokensfree.errors import ErrorCode
@@ -242,7 +243,10 @@ def main():
     config = load_config(os.environ)
     if config.local_token is None:
         raise SystemExit("TOKENSFREE_LOCAL_TOKEN must be set for the new backend")
-    storage = Storage.open(args.db)
+    try:
+        storage = Storage.open(args.db)
+    except (sqlite3.Error, OSError) as error:
+        raise SystemExit("cannot open db %r: %s" % (args.db, error)) from None
     if args.real and args.loopback is not None:
         raise SystemExit("--real and --loopback are mutually exclusive")
     if args.real:
