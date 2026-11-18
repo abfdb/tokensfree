@@ -28,7 +28,7 @@ python -m venv .venv
 
 ~~~powershell
 $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
-.venv\Scripts\python -m tokensfree.edge.host --port 8766
+.venv\Scripts\python -m tokensfree --port 8766          # 等价于 python -m tokensfree.edge.host
 ~~~
 
 端点：`GET /v1/models`、`POST /v1/chat/completions`（非流式）。
@@ -39,7 +39,7 @@ $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
 先起一个本地假 SSE 上游（任意实现），再：
 
 ~~~sh
-.venv\Scripts\python -m tokensfree.edge.host --port 8766 --loopback <上游端口>
+.venv\Scripts\python -m tokensfree --port 8766 --loopback <上游端口>
 ~~~
 
 流式响应使用 `Transfer-Encoding: chunked`，帧序列 role → content → finish → `[DONE]`。

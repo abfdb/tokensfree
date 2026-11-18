@@ -115,7 +115,7 @@ python check_dsh_contract.py # 8 组拒绝行为矩阵，退出 0 表示符合�
 
 一条命令验收 P0：`python scripts/verify_p0.py`（lint → 测试 → 契约矩阵 → 导入出口门禁 → 密钥扫描）。
 
-启动方式、令牌配置、故障排查与已知限制见 [操作手册](docs/operator-guide.md)；旧实现与新内核的差异见 [对照表](docs/legacy-parity.md)。
+启动方式、令牌配置、故障排查与已知限制见 [操作手册](docs/operator-guide.md)；旧实现与新内核的差异见 [对照表](docs/legacy-parity.md)；版本演进见 [CHANGELOG](CHANGELOG.md)。
 
 | 阶段 | 状态 |
 |---|---|
