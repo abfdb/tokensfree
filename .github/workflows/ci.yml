@@ -14,7 +14,6 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -r requirements-dev.txt
-      - run: python -m ruff check .
-      - run: python scripts/check_imports.py
-      - run: python -m pytest -q
-      - run: python check_dsh_contract.py
+      # One gate: lint, tests, DSH contract matrix, import guard, the documented
+      # user journey (real server process + restart replay) and the secret scan.
+      - run: python scripts/verify_p0.py
