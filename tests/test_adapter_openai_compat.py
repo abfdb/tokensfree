@@ -135,3 +135,32 @@ def test_stream_deadline_stops_a_dripping_upstream():
         assert caught.value.retryable is True
     finally:
         server.stop()
+
+
+
+@pytest.mark.parametrize("code", ["1302", "1305"])
+def test_429_rate_limit_error_codes_are_retryable(json_upstream, code):
+    adapter = OpenAICompatAdapter(base_url(json_upstream), KEY)
+    json_upstream.configure(status=429, body=json.dumps({"error": {"code": code, "message": "limited"}}))
+    with pytest.raises(NormalizedError) as caught:
+        asyncio.run(adapter.complete(request(), admission()))
+    assert caught.value.code == "rate_limited"
+    assert caught.value.retryable is True
+
+
+@pytest.mark.parametrize("code", ["1113", "insufficient_quota"])
+def test_429_quota_error_codes_are_not_retryable(json_upstream, code):
+    adapter = OpenAICompatAdapter(base_url(json_upstream), KEY)
+    json_upstream.configure(status=429, body=json.dumps({"error": {"code": code, "message": "no balance"}}))
+    with pytest.raises(NormalizedError) as caught:
+        asyncio.run(adapter.complete(request(), admission()))
+    assert caught.value.code == "quota_exhausted"
+    assert caught.value.retryable is False
+
+
+def test_429_without_error_body_keeps_the_generic_mapping(json_upstream):
+    adapter = OpenAICompatAdapter(base_url(json_upstream), KEY)
+    json_upstream.configure(status=429, body="")
+    with pytest.raises(NormalizedError) as caught:
+        asyncio.run(adapter.complete(request(), admission()))
+    assert caught.value.code == "quota_exhausted"

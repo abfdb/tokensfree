@@ -18,6 +18,11 @@ from tokensfree.adapters.stream_parse import parse_data_line
 
 MAX_BODY_BYTES = 4 * 1024 * 1024
 MAX_LINE_BYTES = 65536
+MAX_ERROR_BODY_BYTES = 8192
+# 429 alone is ambiguous: providers use it both for transient rate limits and for
+# an empty balance. Error-code aware mapping keeps a limited account retryable.
+RATE_LIMIT_CODES = frozenset({"1302", "1305", "rate_limit_exceeded", "rate_limit"})
+QUOTA_CODES = frozenset({"1113", "insufficient_quota", "quota_exhausted"})
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
@@ -86,6 +91,20 @@ class OpenAICompatAdapter:
             return http.client.HTTPSConnection(self._host, self._port, timeout=self._timeout)
         return http.client.HTTPConnection(self._host, self._port, timeout=self._timeout)
 
+    def _error_code(self, response):
+        try:
+            raw = response.read(MAX_ERROR_BODY_BYTES)
+        except (OSError, http.client.HTTPException):
+            return None
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeError):
+            return None
+        error = data.get("error") if isinstance(data, dict) else None
+        if isinstance(error, dict) and error.get("code") is not None:
+            return str(error["code"])
+        return None
+
     def _retry_after(self, response):
         raw = response.getheader("Retry-After")
         if raw is None:
@@ -101,7 +120,16 @@ class OpenAICompatAdapter:
         connection.request("POST", self._path, body=body, headers=self._headers(stream=stream))
         response = connection.getresponse()
         if response.status != 200:
-            error = classify_status(response.status, self._retry_after(response))
+            retry_after = self._retry_after(response)
+            error = None
+            if response.status == 429:
+                code = self._error_code(response)
+                if code in RATE_LIMIT_CODES:
+                    error = NormalizedError("rate_limited", retryable=True, retry_after_s=retry_after)
+                elif code in QUOTA_CODES:
+                    error = NormalizedError("quota_exhausted", retryable=False)
+            if error is None:
+                error = classify_status(response.status, retry_after)
             error.provider = self.name
             connection.close()
             raise error
