@@ -101,14 +101,14 @@ D1 已按零框架 stdlib host 落地；同一个 ASGI app 仍可换由 uvicorn/
 已验证：DSH 首轮请求带 `stream:true` 与 23 个工具定义、网关转发成功、工具调用与结果各一次、最终文本匹配、DSH 退出码 0。
 注意：打包版 DSH 在 `app.asar` 内，普通 node/Python 读不到；需先解包到真实目录，或用 Electron 的 node 运行（脚本会自动选择）。
 
-> 新内核的验证：`python -m pytest -q` 共 591 项通过 / 2 项 opt-in 跳过（含真实本地 HTTP 假上游 → 传输 → 解析 → 流式核心 → 客户端帧的端到端用例）。
+> 新内核的验证：`python -m pytest -q` 共 630 项通过 / 2 项 opt-in 跳过（含真实本地 HTTP 假上游 → 传输 → 解析 → 流式核心 → 客户端帧的端到端用例）。
 
 ## 验证
 
 ```sh
 python -m pip install -r requirements-dev.txt
 python -m ruff check .
-python -m pytest -q          # 591 passed / 2 skipped（skip 为 opt-in 真实 DSH / 真实供应商用例）
+python -m pytest -q          # 630 passed / 2 skipped（skip 为 opt-in 真实 DSH / 真实供应商用例）
 python check_dsh_contract.py # 8 组拒绝行为矩阵，退出 0 表示符合预期
 ```
 
@@ -137,7 +137,7 @@ python check_dsh_contract.py # 8 组拒绝行为矩阵，退出 0 表示符合�
 - `scripts/verify_p0.py` → P0 OK（ruff / pytest / 契约矩阵 / 导入出口门禁 / **真实进程用户旅程** / 密钥扫描）
 - 干净克隆 → venv → 安装依赖 → `verify_p0.py` → P0 OK（可复现；依赖安装需能访问 PyPI）
 - 真实 DSH 0.2.2-rc.1 headless + 合成上游：流式、23 个工具透传、`read` 工具往返、最终文本、退出码 0 全部通过（`scripts/dsh_smoke.py`）
-- P0–P4 内核、多额度池（多 key / key 文件 / 轮转 / 账号生命周期）、真实调用闸门、真实供应商装配与审计修复共 591 项测试通过（2 项 opt-in 用例默认跳过）
+- P0–P4 内核、多额度池（多 key / key 文件 / 轮转 / 账号生命周期）、真实调用闸门、真实供应商装配与审计修复共 630 项测试通过（2 项 opt-in 用例默认跳过）
 - 用户旅程脚本（真实起服务、幂等、跨重启重放）已作为 `verify_p0` 的一部分
 - 真实供应商验收：`scripts/real_smoke.py --fixture` 与 `scripts/real_probe.py --fixture --stream --tools` 自检通过（本地假上游，无需 key、不联网）
 

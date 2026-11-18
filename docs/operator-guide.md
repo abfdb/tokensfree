@@ -119,7 +119,7 @@ TOKENSFREE_DSH_SMOKE=1 .venv\Scripts\python -m pytest tests/test_dsh_smoke_gate.
 
 也可以用环境变量代替参数：`TOKENSFREE_DSH_BIN=<dsh/lib/bin.js>`、`TOKENSFREE_NODE_BIN=<node.exe>`（未设置时依次尝试本机解包副本与打包 app.asar 副本）。
 
-**干净克隆自检**：`git clone` → 建 venv → `pip install -r requirements-dev.txt` → `python scripts/verify_p0.py` 应输出 `P0 OK`（2026-11-18 实测：591 passed / 2 skipped；依赖安装需能访问 PyPI）。
+**干净克隆自检**：`git clone` → 建 venv → `pip install -r requirements-dev.txt` → `python scripts/verify_p0.py` 应输出 `P0 OK`（2026-11-18 实测：630 passed / 2 skipped；依赖安装需能访问 PyPI）。
 
 ## 5. 故障排查
 
