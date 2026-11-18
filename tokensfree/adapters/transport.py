@@ -86,14 +86,17 @@ class LoopbackStreamingAdapter:
             raise TypeError("admission must be issued by the router")
         import json
 
-        body = json.dumps(
-            {
-                "model": request.model or "fixture-model",
-                "messages": [dict(message) for message in request.messages],
-                "stream": True,
-                "max_tokens": request.max_tokens,
-            }
-        ).encode("utf-8")
+        payload = {
+            "model": request.model or "fixture-model",
+            "messages": [dict(message) for message in request.messages],
+            "stream": True,
+            "max_tokens": request.max_tokens,
+        }
+        if request.tools:
+            payload["tools"] = [dict(tool) for tool in request.tools]
+        if request.tool_choice is not None:
+            payload["tool_choice"] = request.tool_choice
+        body = json.dumps(payload).encode("utf-8")
         iterator = self.transport.iter_lines(body)
         sentinel = object()
         while True:

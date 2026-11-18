@@ -184,3 +184,32 @@ def test_malformed_frame_raises(upstream):
     finally:
         Handler.body = SSE_BODY
     assert caught.value.code == "invalid_response"
+
+
+class RecordingTransport:
+    def __init__(self):
+        self.bodies = []
+
+    def iter_lines(self, body):
+        self.bodies.append(json.loads(body.decode("utf-8")))
+        yield 'data: {"choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":null}]}\n'
+        yield "data: [DONE]\n"
+
+
+def test_streaming_adapter_forwards_tools():
+    from tokensfree.adapters.base import Admission, ChatRequest, _ADMISSION_TOKEN
+
+    transport = RecordingTransport()
+    adapter = LoopbackStreamingAdapter(1234, transport=transport)
+    admission = Admission(provider="loopback", capabilities=frozenset({"text", "stream"}), simulation=True, _token=_ADMISSION_TOKEN)
+    tools = ({"type": "function", "function": {"name": "read", "parameters": {"type": "object"}}},)
+    request = ChatRequest(model="fixture-model", messages=({"role": "user", "content": "x"},), tools=tools, tool_choice="auto")
+
+    async def run_all():
+        return [event async for event in adapter.stream(request, admission)]
+
+    asyncio.run(run_all())
+    sent = transport.bodies[0]
+    assert sent["tools"][0]["function"]["name"] == "read"
+    assert sent["tool_choice"] == "auto"
+    assert sent["stream"] is True

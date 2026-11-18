@@ -107,3 +107,23 @@ def test_build_error_reuses_codes():
     status, body = build_error("refusal", "req-1".rjust(1))
     assert status == 422
     assert body["error"]["code"] == "refusal"
+
+
+def test_dsh_default_max_tokens_is_accepted():
+    # DSH asks for 128000 tokens by default; rejecting it broke the real client.
+    parsed = parse_chat_payload(payload(max_tokens=128000))
+    assert parsed.request.max_tokens == 128000
+    with pytest.raises(RequestRejected):
+        parse_chat_payload(payload(max_tokens=1_000_001))
+
+
+def test_assistant_content_null_with_tool_calls_is_accepted():
+    messages = [
+        {"role": "user", "content": "read it"},
+        {"role": "assistant", "content": None, "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "read", "arguments": "{}"}}]},
+        {"role": "tool", "tool_call_id": "call_1", "content": "body"},
+    ]
+    parsed = parse_chat_payload(payload(messages=messages))
+    assert parsed.request.messages[1]["content"] == ""
+    assert parsed.request.messages[1]["tool_calls"][0]["id"] == "call_1"
+    assert parsed.requires_tools is True

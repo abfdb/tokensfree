@@ -11,6 +11,7 @@ from tokensfree.errors import ErrorCode, http_error
 
 ALLOWED_ROLES = frozenset({"system", "user", "assistant", "tool", "developer"})
 DEFAULT_MAX_TOKENS = 1024
+MAX_CONTRACT_TOKENS = 1_000_000
 
 _UPSTREAM_TO_CLIENT = {
     "auth_invalid": ErrorCode.upstream_auth_failed,
@@ -61,7 +62,14 @@ def _parse_messages(messages, developer_role_policy, max_messages, max_content_c
         content = message.get("content")
         if role not in ALLOWED_ROLES:
             _reject()
-        if not isinstance(content, str) or len(content) > max_content_chars:
+        if not isinstance(content, str):
+            # OpenAI permits content:null when an assistant message carries tool_calls.
+            tool_calls = message.get("tool_calls")
+            if role == "assistant" and content is None and isinstance(tool_calls, list) and tool_calls:
+                content = ""
+            else:
+                _reject()
+        if len(content) > max_content_chars:
             _reject()
         if role == "developer":
             if developer_role_policy != "map":
@@ -94,7 +102,7 @@ def parse_chat_payload(payload, *, developer_role_policy="map", max_messages=32,
     if not isinstance(stream, bool):
         _reject()
     max_tokens = payload.get("max_tokens", DEFAULT_MAX_TOKENS)
-    if type(max_tokens) is not int or not 1 <= max_tokens <= 32768:
+    if type(max_tokens) is not int or not 1 <= max_tokens <= 1_000_000:
         _reject()
     messages, needs_tools_from_messages = _parse_messages(
         payload.get("messages"), developer_role_policy, max_messages, max_content_chars
