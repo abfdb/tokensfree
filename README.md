@@ -113,7 +113,7 @@ python check_dsh_contract.py # 8 项契约矩阵，退出 0 表示拒绝行为�
 
 推荐在虚拟环境中安装开发依赖：`python -m venv .venv`，再 `.venv\Scripts\pip install -r requirements-dev.txt`（macOS/Linux 用 `.venv/bin/pip`）。之后的命令用 `.venv\Scripts\python` 代替 `python`。
 
-一条命令验收 P0：`python scripts/verify_p0.py`（lint → 测试 → 契约矩阵 → 密钥扫描）。
+一条命令验收 P0：`python scripts/verify_p0.py`（lint → 测试 → 契约矩阵 → 导入出口门禁 → 密钥扫描）。
 
 | 阶段 | 状态 |
 |---|---|

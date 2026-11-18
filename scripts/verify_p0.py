@@ -46,6 +46,7 @@ def main():
         ("ruff", ["-m", "ruff", "check", "."]),
         ("pytest", ["-m", "pytest", "-q"]),
         ("contract", ["check_dsh_contract.py"]),
+        ("import-guard", ["scripts/check_imports.py"]),
     )
     for name, args in checks:
         code, output = run(args)
