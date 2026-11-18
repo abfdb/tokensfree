@@ -119,7 +119,7 @@ TOKENSFREE_DSH_SMOKE=1 .venv\Scripts\python -m pytest tests/test_dsh_smoke_gate.
 
 也可以用环境变量代替参数：`TOKENSFREE_DSH_BIN=<dsh/lib/bin.js>`、`TOKENSFREE_NODE_BIN=<node.exe>`（未设置时依次尝试本机解包副本与打包 app.asar 副本）。
 
-**干净克隆自检**：`git clone` → 建 venv → `pip install -r requirements-dev.txt` → `python scripts/verify_p0.py` 应输出 `P0 OK`（已在 2026-11-18 实测通过，329 passed / 1 skipped）。
+**干净克隆自检**：`git clone` → 建 venv → `pip install -r requirements-dev.txt` → `python scripts/verify_p0.py` 应输出 `P0 OK`（2026-11-18 实测：561 passed / 2 skipped；依赖安装需能访问 PyPI）。
 
 ## 5. 故障排查
 
@@ -136,9 +136,9 @@ TOKENSFREE_DSH_SMOKE=1 .venv\Scripts\python -m pytest tests/test_dsh_smoke_gate.
 ## 6. 已知限制（诚实清单）
 
 - **没有启用真实供应商**：`adapters/openai_compat.py` 已实现；真实调用需要**三个条件同时成立**——`TOKENSFREE_ENABLE_REAL=1`、该 provider 在授权名单、`cost_evidence="free_verified"` 且证据未过期。默认全部不满足，所以仍然零外发。等你提供供应商与账号后即可开启
-- **没有系统凭据库**：keyring 绑定未实现（等 D2）
+- **没有系统凭据库**：keyring 绑定未实现；key 目前来自环境变量或 key 文件（D2 已选定智谱，见 `docs/providers/zhipu.md`）
 - **零外发证明**：Windows 无 Linux 网络命名空间；当前靠"只配置 loopback baseURL + 断言"保证
-- **无服务器框架选型**：当前 stdlib host 已能跑 DSH；D1 只影响托管方式
+- **无服务器框架依赖**：D1 以零框架 stdlib host 落地；同一 ASGI app 仍可交给 uvicorn/hypercorn 托管
 - **旧实现仍存在**：`server.py` 等为冻结的 mock 参考实现，与新内核通过契约测试对照
 
 ## 7. 目录地图

@@ -1,6 +1,6 @@
 # tokensfree 0.6 · 本地路由实验台
 
-**这是 mock-only 开发原型，不是真实免费 API 网关。没有外部模型请求，不需要任何账号或密钥。未公开发布。**
+**默认是安全的本地 mock 原型：没有外部模型请求，不需要任何账号或密钥。真实免费供应商通道已实现但默认关闭，必须同时满足三个条件才可能开启（见下文 P4）。未公开发布。**
 
 ## 启动
 需要 Python 3.10 或更新版本，无第三方 Python 依赖。
@@ -50,7 +50,7 @@ print(json.load(urllib.request.urlopen(req)))
 
 ## 已实现 / 未实现（截至 2026-11-18）
 
-新内核模块已实现并通过测试，但**尚未接入 HTTP 边缘**（等 D1 选型）：真实供应商适配器与凭证库（等 D2）、DSH 端到端冒烟、账号池调度、Windows 安装包与后台常驻、GPU 调度。当前 `python server.py` 启动的仍是 mock-only 旧实现。
+新内核已接入 HTTP 边缘并可作为独立服务运行（`python -m tokensfree`，零第三方运行时依赖）：真实供应商适配器、DSH 端到端冒烟、多额度池（多 key 轮换 / 账号状态 / 配额账本 / 运维 CLI）均已实现。仍待完成：真实供应商联调（等填入 key）、系统凭证库（keyring）、Windows 安装包与后台常驻、GPU 调度。旧 `python server.py` 保留为冻结的 mock 参考实现。
 
 **新内核（`tokensfree/`，零运行时依赖）**
 
@@ -87,7 +87,8 @@ mock 运行时没有流式适配器，因此 `stream:true` 会得到明确的 `4
 ```
 
 流式响应使用 `Transfer-Encoding: chunked`，帧序列为 role → content → finish → `[DONE]`。
-一旦 D1 选定服务器框架，同一个 ASGI app 可以换由 uvicorn/hypercorn 托管；aiohttp 后端也只是另一个 `Backend` 实现。
+真实供应商的启动方式、环境变量与多 key 配置见 [操作手册](docs/operator-guide.md) 的「启用真实供应商」。
+D1 已按零框架 stdlib host 落地；同一个 ASGI app 仍可换由 uvicorn/hypercorn 托管，aiohttp 后端只是另一个 `Backend` 实现。
 
 ### 真实 DSH 冒烟（合成上游）
 
@@ -100,14 +101,14 @@ mock 运行时没有流式适配器，因此 `stream:true` 会得到明确的 `4
 已验证：DSH 首轮请求带 `stream:true` 与 23 个工具定义、网关转发成功、工具调用与结果各一次、最终文本匹配、DSH 退出码 0。
 注意：打包版 DSH 在 `app.asar` 内，普通 node/Python 读不到；需先解包到真实目录，或用 Electron 的 node 运行（脚本会自动选择）。
 
-> 新内核的验证：`python -m pytest -q` 共 329 项（含 5 个端到端用例：真实本地 HTTP 假上游 → 传输 → 解析 → 流式核心 → 客户端帧）。
+> 新内核的验证：`python -m pytest -q` 共 561 项通过 / 2 项 opt-in 跳过（含真实本地 HTTP 假上游 → 传输 → 解析 → 流式核心 → 客户端帧的端到端用例）。
 
 ## 验证
 
 ```sh
 python -m pip install -r requirements-dev.txt
 python -m ruff check .
-python -m pytest -q          # 379 passed / 1 skipped（skip 为 opt-in 真实 DSH 用例）
+python -m pytest -q          # 561 passed / 2 skipped（skip 为 opt-in 真实 DSH / 真实供应商用例）
 python check_dsh_contract.py # 8 组拒绝行为矩阵，退出 0 表示符合预期
 ```
 
@@ -121,18 +122,20 @@ python check_dsh_contract.py # 8 组拒绝行为矩阵，退出 0 表示符合�
 |---|---|
 | P0 工程基线：CI（三平台 × 3 个 Python 版本，跑完整 `verify_p0` 门禁）、统一错误契约、结构化日志、契约矩阵可注入 | ✅ 完成 |
 | P1 内核：配置 / 适配器契约 / 候选 / 准入闸门 / loopback 适配器 / OpenAI 兼容适配器（默认禁用） | ✅ 完成 |
-| P1 6–7：HTTP 边缘（ASGI + stdlib host）+ 双实现契约对照 | ✅ 完成（框架选型等 D1，不影响运行） |
+| P1 6–7：HTTP 边缘（ASGI app + stdlib host，零框架依赖）+ 双实现契约对照 | ✅ 完成（D1 以 stdlib host 落地；ASGI app 可换 uvicorn/hypercorn） |
 | P2 协议：SSE 编码与解析 / 工具增量装配 / 流式核心 / 上游传输 | ✅ 完成 |
 | P2 真实 DSH headless 端到端（合成上游，工具往返） | ✅ 已验证 |
-| P3 持久化：迁移 / 幂等 / 只增账本 / 事件（已接入可运行服务，`--db` 可跨重启） | ✅ 完成 |
-| P4 真实调用闸门（开关 + 授权 + 免费证据三条件）+ 环境变量装配（`--real`） | ✅ 默认关闭，等 D2 开启 |
-| 真实供应商装配与验收脚本（`--real` / `real_probe.py` / `real_smoke.py` / 证据快照，默认关闭） | ✅ 等 D2 填入 key |
-| 真实模型联调 / 系统凭证库（keyring） | ⛔ 等 D2 |
+| P3 持久化：迁移 / 幂等 / 只增账本 / 事件 / 账号 / 熔断状态（`--db` 可跨重启） | ✅ 完成 |
+| P3+ 多额度池：多 key / key 文件 / 轮转 / 熔断隔离 / 账号生命周期 / 配额账本 / 运维 CLI | ✅ 完成（等真实多账号联调） |
+| P4 真实调用闸门（开关 + 授权 + 免费证据三条件）+ 环境变量装配（`--real`） | ✅ 默认关闭；D2 选定智谱，等填入 key 联调 |
+| 真实供应商装配与验收脚本（`--real` / `real_probe.py` / `real_smoke.py` / 证据快照，默认关闭） | ✅ 等填入智谱 key |
+| 真实模型联调 | ⛔ 等填入 key（D2 已选定智谱） |
+| 系统凭证库（keyring） | ⛔ 未实现（key 来自环境变量或文件） |
 
 **当前验证状态（2026-11-18）**
 
 - `scripts/verify_p0.py` → P0 OK（ruff / pytest / 契约矩阵 / 导入出口门禁 / **真实进程用户旅程** / 密钥扫描）
-- 干净克隆 → venv → 安装依赖 → `verify_p0.py` → P0 OK（可复现）
+- 干净克隆 → venv → 安装依赖 → `verify_p0.py` → P0 OK（可复现；依赖安装需能访问 PyPI）
 - 真实 DSH 0.2.2-rc.1 headless + 合成上游：流式、23 个工具透传、`read` 工具往返、最终文本、退出码 0 全部通过（`scripts/dsh_smoke.py`）
 - P0–P4 内核、多额度池（多 key / key 文件 / 轮转 / 账号生命周期）、真实调用闸门、真实供应商装配与审计修复共 561 项测试通过（2 项 opt-in 用例默认跳过）
 - 用户旅程脚本（真实起服务、幂等、跨重启重放）已作为 `verify_p0` 的一部分

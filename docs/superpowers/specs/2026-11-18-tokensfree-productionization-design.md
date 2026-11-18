@@ -290,9 +290,11 @@ DSH 的自定义 provider 走 `dsh-llm-pi-ai` 的 hand-declared route。实测�
 | P2 协议（SSE / 工具 / 流式 / 传输） | ✅ | `tokensfree/sse.py`、`adapters/stream_parse.py`、`adapters/transport.py`、`router/execute.py`、`edge/stream_core.py` |
 | P3 持久化 + 接入请求链路 | ✅ | `tokensfree/store/*`、`edge/app_core.py` |
 | 边缘协议 + 应用核心 + 运行时装配 | ✅ | `edge/protocol.py`、`edge/app_core.py`、`runtime.py` |
-| P1 Task 6–7：HTTP 边缘 + 双实现对照 | ⛔ 等 D1 | 计划见 `plans/2026-11-18-p2-streaming-and-dsh.md` |
-| 真实供应商 + keyring 绑定 | ⛔ 等 D2 | 同上 |
-| DSH 端到端冒烟 | ⛔ 依赖边缘层 | 同上 |
+| P1 Task 6–7：HTTP 边缘 + 双实现对照 | ✅ D1 以零框架 stdlib host 落地 | `edge/asgi.py`、`edge/backend.py`、`edge/host.py` |
+| 真实供应商装配 + 探针 + 验收 + 证据快照 | ✅ 等填入智谱 key（D2 已选定） | `adapters/openai_compat.py`、`runtime.build_real_runtime`、`scripts/{real_probe,real_smoke,evidence_snapshot}.py`、`docs/providers/zhipu.md` |
+| 多额度池与账号生命周期（多 key / 轮转 / 熔断持久化 / 配额账本 / 运维 CLI） | ✅ | `runtime.py`、`store/repos.py`、`router/{health,execute}.py`、`edge/app_core.py`、`scripts/accounts_admin.py` |
+| DSH 端到端冒烟 + 用户旅程 | ✅ | `scripts/dsh_smoke.py`、`scripts/journey_smoke.py` |
+| 系统凭证库（keyring） | ⛔ 未实现（key 来自环境变量/文件） | `docs/credential-boundary.md` |
 
 ### 与计划的偏离（均为显式裁决）
 
@@ -301,13 +303,13 @@ DSH 的自定义 provider 走 `dsh-llm-pi-ai` 的 hand-declared route。实测�
 3. **`request_id` 并入错误契约**（计划放在 Task 4）：同一批调用点只需改一次。
 4. **`execute()` 语义修正**：候选耗尽时抛出**最后一个可重试错误**，而不是退化成 `no_free_provider`，避免丢失 429/Retry-After 语义。
 5. **错误码表追加 5 个上游码**（`upstream_auth_failed` / `upstream_rate_limited` / `upstream_error` / `upstream_timeout` / `upstream_disconnected`）：只增不改，旧客户端不受影响。
-6. **上游传输用 stdlib `http.client`**（而非计划中的 aiohttp/httpx）：传输层与 D1（服务端框架）解耦，等 D1 确定后再决定是否替换。
+6. **上游传输用 stdlib `http.client`**（而非计划中的 aiohttp/httpx）：传输层与 D1（服务端框架）解耦；D1 最终以零框架 stdlib host 落地，暂无替换计划。
 7. **旧 HTTP 处理层改为复用 `tokensfree.edge.auth`**：Host/Origin/令牌校验不再有两份实现。随之修正一处行为：Bearer 方案名按 RFC 7235 大小写不敏感（旧实现只接受精确的 `Bearer `），并有 `tests/test_legacy_edge_parity.py` 逐组合对照新旧规则。
 8. **开发依赖装进仓库内 `.venv`**：本机子进程 `HOME` 为空导致 pip 用户目录落成仓库内的字面 `~` 目录，已回退误提交、删除并加入 `.gitignore`。
 
 ### 未完成的验收
 
-G1（DSH 工具往返）、G2（默认零外发的 HTTP 侧证明）、G5 的 keyring 部分，均依赖 D1/D2 确认后实现；G3/G4/G6/G7 已由当前测试覆盖。
+G1（DSH 工具往返）已由 `scripts/dsh_smoke.py` 与用户旅程验证；G2（默认零外发的 HTTP 侧证明）仍只在配置/断言层面保证（跨平台零外发仍未证明）；G5 的 keyring 部分未实现。G3/G4/G6/G7 已由当前测试覆盖。
 
 
 ### 附录 E：真实 DSH 冒烟结果（2026-11-18）
