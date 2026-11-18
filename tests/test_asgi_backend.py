@@ -6,10 +6,12 @@ from providers import ProviderSpec
 from tokensfree.adapters.base import ChatResult
 from tokensfree.adapters.stream_parse import StreamEvent
 from tokensfree.config import load_config
+from tokensfree.adapters.base import NormalizedError
 from tokensfree.edge.app_core import Services
 from tokensfree.edge.asgi import make_asgi_app
 from tokensfree.edge.backend import MemoryBackend
 from tokensfree.router.admission import admit
+from tokensfree.router.execute import NoProviderAvailable
 
 TOKEN = "c" * 32
 CONFIG = load_config({"TOKENSFREE_LOCAL_TOKEN": TOKEN})
@@ -119,3 +121,36 @@ def test_oversized_body_is_413():
     status, _, body, _ = call(app, "POST", "/v1/chat/completions", body=b"x" * (limit + 1))
     assert status == 413
     assert json.loads(body)["error"]["code"] == "payload_too_large"
+
+
+
+class EmptyStreamAdapter:
+    capabilities = frozenset({"text", "stream"})
+
+    async def stream(self, request, admission):
+        raise NoProviderAvailable((("alpha", "upstream_disconnected"),))
+        yield  # pragma: no cover
+
+
+class FailingStreamAdapter:
+    capabilities = frozenset({"text", "stream"})
+
+    async def stream(self, request, admission):
+        raise NormalizedError("upstream_error", retryable=True)
+        yield  # pragma: no cover
+
+
+def test_stream_without_any_provider_returns_a_json_error():
+    app = app_for(specs=(STREAMING,), adapters={"stream-alpha": EmptyStreamAdapter()})
+    status, headers, body, _ = call(app, "POST", "/v1/chat/completions", body=json.dumps(dict(PAYLOAD, stream=True)).encode())
+    assert status == 503
+    assert headers["content-type"].startswith("application/json")
+    assert json.loads(body)["error"]["code"] == "no_free_provider"
+
+
+def test_stream_failing_before_first_byte_returns_a_json_error():
+    app = app_for(specs=(STREAMING,), adapters={"stream-alpha": FailingStreamAdapter()})
+    status, headers, body, _ = call(app, "POST", "/v1/chat/completions", body=json.dumps(dict(PAYLOAD, stream=True)).encode())
+    assert status == 502
+    assert headers["content-type"].startswith("application/json")
+    assert json.loads(body)["error"]["code"] == "upstream_error"

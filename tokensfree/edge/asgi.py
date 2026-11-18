@@ -5,9 +5,11 @@ It only translates the ASGI protocol; every decision stays in the backend contra
 """
 import json
 
+from tokensfree.adapters.base import NormalizedError
 from tokensfree.edge.backend import EdgeRequest
-from tokensfree.edge.protocol import build_error
+from tokensfree.edge.protocol import build_error, map_upstream_error
 from tokensfree.errors import ErrorCode
+from tokensfree.router.execute import NoProviderAvailable
 
 
 class BodyTooLarge(Exception):
@@ -45,6 +47,14 @@ def _send_headers(headers):
     return [(name.encode("latin-1"), value.encode("latin-1")) for name, value in headers.items()]
 
 
+async def _send_json_error(send, code):
+    status, payload = build_error(code, "req-stream")
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    headers = {"content-type": "application/json; charset=utf-8", "cache-control": "no-store"}
+    await send({"type": "http.response.start", "status": status, "headers": _send_headers(headers)})
+    await send({"type": "http.response.body", "body": body, "more_body": False})
+
+
 def make_asgi_app(backend):
     if not hasattr(backend, "handle"):
         raise TypeError("backend must implement handle()")
@@ -62,13 +72,32 @@ def make_asgi_app(backend):
             await send({"type": "http.response.body", "body": body, "more_body": False})
             return
         response = await backend.handle(request)
+        if response.stream is None:
+            await send(
+                {"type": "http.response.start", "status": response.status, "headers": _send_headers(response.headers)}
+            )
+            await send({"type": "http.response.body", "body": response.body, "more_body": False})
+            return
+        # Pull the first frame before sending the head: if every candidate fails
+        # before the first byte, the client gets a normal JSON error (503/502)
+        # instead of a 200 that immediately dies.
+        stream = response.stream
+        try:
+            first_chunk = await stream.__anext__()
+        except StopAsyncIteration:
+            first_chunk = None
+        except NormalizedError as error:
+            await _send_json_error(send, map_upstream_error(error))
+            return
+        except NoProviderAvailable:
+            await _send_json_error(send, ErrorCode.no_free_provider)
+            return
         await send(
             {"type": "http.response.start", "status": response.status, "headers": _send_headers(response.headers)}
         )
-        if response.stream is None:
-            await send({"type": "http.response.body", "body": response.body, "more_body": False})
-            return
-        async for chunk in response.stream:
+        if first_chunk is not None:
+            await send({"type": "http.response.body", "body": first_chunk, "more_body": True})
+        async for chunk in stream:
             await send({"type": "http.response.body", "body": chunk, "more_body": True})
         await send({"type": "http.response.body", "body": b"", "more_body": False})
 

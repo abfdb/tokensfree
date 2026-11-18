@@ -20,6 +20,8 @@ from tokensfree.errors import ErrorCode
 from tokensfree.router.candidates import build_candidates
 from tokensfree.router.execute import Candidate, NoProviderAvailable, execute
 
+MAX_IDEMPOTENCY_KEY_CHARS = 200
+
 
 @dataclass(frozen=True)
 class Services:
@@ -149,6 +151,8 @@ def _record(services, outcome, *, request_id, account_id, started):
 
 async def handle_chat(payload, *, services, request_id, developer_role_policy="map", idempotency_key=None, account_id=None):
     started = time.time()
+    if idempotency_key is not None and (not isinstance(idempotency_key, str) or not 1 <= len(idempotency_key) <= MAX_IDEMPOTENCY_KEY_CHARS):
+        return _failed(ErrorCode.invalid_request, request_id)
     repository = services.idempotency
     reserved = False
     if repository is not None and idempotency_key is not None:

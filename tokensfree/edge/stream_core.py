@@ -14,7 +14,7 @@ from tokensfree.errors import ErrorCode
 from tokensfree.router.admission import AdmissionDenied
 from tokensfree.router.candidates import build_candidates
 from tokensfree.router.execute import NoProviderAvailable
-from tokensfree.sse import SseEncoder, ToolCallAssembler
+from tokensfree.sse import SseEncoder
 
 
 @dataclass(frozen=True)
@@ -76,16 +76,12 @@ async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=ti
             trace.append((spec.name, "denied:" + denied.reason))
             continue
         encoder = SseEncoder(model=spec.name, request_id=plan.request_id)
-        assembler = ToolCallAssembler()
         emitted = False
         first = True
         try:
             async for event in adapter.stream(plan.parsed.request, admission):
                 if event.kind == "delta":
                     delta = dict(event.delta or {})
-                    tool_calls = delta.get("tool_calls")
-                    if tool_calls:
-                        assembler.add(tool_calls)
                     if first:
                         if "role" not in delta:
                             yield encoder.chunk({"role": "assistant"})
@@ -104,6 +100,17 @@ async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=ti
                     yield encoder.chunk({}, finish_reason=event.finish_reason or "stop")
                     yield encoder.done()
                     return
+                if event.kind == "done":
+                    # Some upstreams end with [DONE] but no finish_reason chunk.
+                    if first:
+                        yield encoder.chunk({"role": "assistant"})
+                        emitted = True
+                        first = False
+                    if breaker is not None:
+                        breaker.record_success(clock())
+                    yield encoder.chunk({}, finish_reason="stop")
+                    yield encoder.done()
+                    return
         except NormalizedError as error:
             if breaker is not None:
                 breaker.record_failure(clock())
@@ -115,6 +122,15 @@ async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=ti
             if not error.retryable or len(trace) >= max_attempts:
                 raise
             continue
+        # The adapter's stream ended without finish/[DONE]: treat it as truncated,
+        # never as a successful end, and never fall through silently.
+        if emitted:
+            yield encoder.error("upstream_disconnected")
+            return
+        trace.append((spec.name, "upstream_disconnected"))
+        last_error = NormalizedError("upstream_disconnected", retryable=True, provider=spec.name)
+        if len(trace) >= max_attempts:
+            raise last_error
     if last_error is not None:
         raise last_error
     raise NoProviderAvailable(trace)
