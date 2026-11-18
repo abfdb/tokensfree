@@ -65,7 +65,10 @@ def test_http_replay_is_served_from_storage(storage):
     assert first_status == 200 and second_status == 200
     assert first_body == second_body                      # replayed verbatim, same request id
     assert json.loads(first_body)["id"] == json.loads(second_body)["id"]
-    assert len(storage.events.recent(10)) == 1            # replay is not a new attempt
+    events = storage.events.recent(10)
+    assert len(events) == 2                               # one attempt + one replay, no ledger charge
+    assert {row["outcome"] for row in events} == {"success", "replay"}
+    assert json.loads(events[0]["detail"])["status"] == 200
 
     conflict_status, conflict_body = post("key-1")
     assert conflict_status == 200                         # same key + same payload keeps replaying
@@ -107,7 +110,9 @@ def test_idempotency_survives_a_storage_reopen(tmp_path):
         second = asyncio.run(handle_chat(PAYLOAD, services=second_runtime.services, request_id="req-b", idempotency_key="durable"))
         assert second.status == 200
         assert second.body["id"] == first_id             # same stored response, not a new call
-        assert len(second_storage.events.recent(10)) == 1
+        events = second_storage.events.recent(10)
+        assert len(events) == 2
+        assert {row["outcome"] for row in events} == {"success", "replay"}
     finally:
         second_storage.close()
 

@@ -170,11 +170,22 @@ async def handle_chat(payload, *, services, request_id, developer_role_policy="m
             return _failed(ErrorCode.idempotency_conflict, request_id)
         if reservation.status == "replay":
             stored = json.loads(reservation.response_json or "{}")
-            return ChatOutcome(
+            replay = ChatOutcome(
                 status=int(stored.get("status", 200)),
                 body=stored.get("body", {}),
                 request_id=request_id,
             )
+            # A replay is free (no ledger row) but must stay visible to operators.
+            if services.events is not None:
+                services.events.append(
+                    request_id,
+                    outcome="replay",
+                    account_id=account_id,
+                    latency_ms=int((time.time() - started) * 1000),
+                    detail=json.dumps({"status": replay.status, "error": _error_code(replay.body)}, ensure_ascii=False),
+                    at=started,
+                )
+            return replay
         reserved = True
 
     try:
