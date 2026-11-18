@@ -8,6 +8,8 @@ import json
 import time
 from dataclasses import dataclass
 
+from tokensfree import obs
+
 from tokensfree.adapters.base import NormalizedError
 from tokensfree.edge.protocol import (
     RequestRejected,
@@ -139,6 +141,14 @@ async def _execute(payload, *, services, request_id, developer_role_policy):
     return ChatOutcome(status=200, body=body, request_id=request_id, provider=execution.provider)
 
 
+def safe_bookkeeping(step, *, request_id, outcome="bookkeeping_failed"):
+    """Ledger/event/account writes are best-effort: a storage hiccup must not fail the answer."""
+    try:
+        step()
+    except Exception:
+        obs.log_event("bookkeeping_error", level="error", request_id=request_id, outcome=outcome)
+
+
 def mark_account_failure(services, error, *, request_id):
     """Persist what an account-scoped upstream failure told us about that account."""
     account = account_for(services, error.provider)
@@ -159,7 +169,11 @@ def account_failure_hook(services, request_id):
     """Per-attempt hook: persist account-scoped failures even if a later candidate serves."""
 
     def hook(spec, error):
-        mark_account_failure(services, error, request_id=request_id)
+        safe_bookkeeping(
+            lambda: mark_account_failure(services, error, request_id=request_id),
+            request_id=request_id,
+            outcome="account_bookkeeping_failed",
+        )
 
     return hook
 
@@ -220,13 +234,19 @@ async def handle_chat(payload, *, services, request_id, developer_role_policy="m
             )
             # A replay is free (no ledger row) but must stay visible to operators.
             if services.events is not None:
-                services.events.append(
-                    request_id,
-                    outcome="replay",
-                    account_id=account_id if account_id is not None else account_for(services, replay.body.get("model") if isinstance(replay.body, dict) else None),
-                    latency_ms=int((time.time() - started) * 1000),
-                    detail=json.dumps({"status": replay.status, "error": _error_code(replay.body)}, ensure_ascii=False),
-                    at=started,
+                safe_bookkeeping(
+                    lambda: services.events.append(
+                        request_id,
+                        outcome="replay",
+                        account_id=account_id if account_id is not None else account_for(
+                            services, replay.body.get("model") if isinstance(replay.body, dict) else None
+                        ),
+                        latency_ms=int((time.time() - started) * 1000),
+                        detail=json.dumps({"status": replay.status, "error": _error_code(replay.body)}, ensure_ascii=False),
+                        at=started,
+                    ),
+                    request_id=request_id,
+                    outcome="replay_bookkeeping_failed",
                 )
             return replay
         reserved = True
@@ -241,15 +261,19 @@ async def handle_chat(payload, *, services, request_id, developer_role_policy="m
         raise
 
     if reserved:
-        try:
+        def complete_reservation():
             repository.complete(
                 idempotency_key,
                 json.dumps({"status": outcome.status, "body": outcome.body}, ensure_ascii=False),
             )
-        except KeyError:
-            # The reservation expired (TTL) while this request was running. The
-            # response is still valid; only the replay record is gone.
-            pass
+
+        # A failed completion (expired reservation, storage hiccup) loses only the
+        # replay record, never the response itself.
+        safe_bookkeeping(complete_reservation, request_id=request_id, outcome="idempotency_complete_failed")
     recorded_account = account_id if account_id is not None else account_for(services, outcome.provider)
-    _record(services, outcome, request_id=request_id, account_id=recorded_account, started=started)
+    safe_bookkeeping(
+        lambda: _record(services, outcome, request_id=request_id, account_id=recorded_account, started=started),
+        request_id=request_id,
+        outcome="ledger_bookkeeping_failed",
+    )
     return outcome
