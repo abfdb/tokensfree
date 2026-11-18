@@ -57,6 +57,9 @@ def prepare_stream(payload, *, services, request_id, developer_role_policy="map"
     if not candidates:
         status, body = build_error(ErrorCode.unsupported_capability, request_id)
         return StreamFailure(status, body)
+    rotation = getattr(services, "rotation", None)
+    if rotation is not None:
+        candidates = list(rotation.order(candidates))
     return StreamPlan(parsed=parsed, candidates=tuple(candidates), request_id=request_id)
 
 

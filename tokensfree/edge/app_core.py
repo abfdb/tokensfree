@@ -33,6 +33,7 @@ class Services:
     ledger: object = None
     events: object = None
     breakers: object = None
+    rotation: object = None
 
 
 @dataclass(frozen=True)
@@ -107,6 +108,9 @@ async def _execute(payload, *, services, request_id, developer_role_policy):
     )
     if candidates and not enriched:
         return _failed(ErrorCode.unsupported_capability, request_id)
+    rotation = getattr(services, "rotation", None)
+    if rotation is not None and enriched:
+        enriched = rotation.order(enriched)
     try:
         execution = await execute(
             enriched, admit=services.admit, request=parsed.request, breaker_for=breaker_lookup(services)

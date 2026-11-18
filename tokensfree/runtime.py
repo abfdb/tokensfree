@@ -3,6 +3,7 @@
 Turns configuration plus adapter instances into the Services the edge core needs.
 Opening a socket and serving HTTP stay outside this module.
 """
+import pathlib
 import time
 from dataclasses import dataclass
 
@@ -15,6 +16,7 @@ from tokensfree.config import AppConfig, load_config
 from tokensfree.edge.app_core import Services
 from tokensfree.router.admission import admit
 from tokensfree.router.health import CircuitBreaker
+from tokensfree.router.scheduling import RoundRobin
 from tokensfree.store.db import connect, migrate
 from tokensfree.store.repos import EventsRepo, IdempotencyRepo, LedgerRepo
 
@@ -66,7 +68,7 @@ class Runtime:
     storage: object = None
 
 
-def build_services(*, config, specs, adapters, authorized, clock=time.time, storage=None, breakers=None):
+def build_services(*, config, specs, adapters, authorized, clock=time.time, storage=None, breakers=None, rotation=None):
     specs = tuple(specs)
     names = {spec.name for spec in specs}
     if set(adapters) - names:
@@ -95,6 +97,7 @@ def build_services(*, config, specs, adapters, authorized, clock=time.time, stor
         ledger=getattr(storage, "ledger", None),
         events=getattr(storage, "events", None),
         breakers=breakers,
+        rotation=rotation,
     )
 
 
@@ -158,20 +161,42 @@ def build_loopback_streaming_runtime(port, *, config=None, clock=time.time, ttl_
     )
 
 
+KEY_SOURCE_VARS = (
+    "TOKENSFREE_REAL_API_KEY",
+    "TOKENSFREE_REAL_API_KEYS",
+    "TOKENSFREE_REAL_API_KEY_FILE",
+    "TOKENSFREE_REAL_API_KEYS_FILE",
+)
+
+
+def _keys_from_file(path):
+    try:
+        raw = pathlib.Path(str(path)).read_text(encoding="utf-8")
+    except OSError:
+        raise ValueError("cannot read API key file") from None
+    return [line.strip() for line in raw.replace(",", "\n").splitlines() if line.strip()]
+
+
 def real_keys_from_env(env):
-    """One key or a comma/whitespace separated key list (up to MAX_REAL_KEYS)."""
-    single = str(env.get("TOKENSFREE_REAL_API_KEY", "")).strip()
-    multiple = str(env.get("TOKENSFREE_REAL_API_KEYS", "")).strip()
-    if single and multiple:
-        raise ValueError("set only one of TOKENSFREE_REAL_API_KEY and TOKENSFREE_REAL_API_KEYS")
-    raw = multiple if multiple else single
-    if not raw:
+    """One key or up to MAX_REAL_KEYS, inline or from a file (exactly one source)."""
+    provided = [name for name in KEY_SOURCE_VARS if str(env.get(name, "")).strip()]
+    if len(provided) > 1:
+        raise ValueError("set only one of " + " / ".join(KEY_SOURCE_VARS))
+    if not provided:
         raise ValueError("missing real-provider environment: TOKENSFREE_REAL_API_KEY")
-    keys = [part.strip() for part in raw.replace(",", " ").split() if part.strip()]
+    source = provided[0]
+    if source == "TOKENSFREE_REAL_API_KEY":
+        keys = [str(env[source]).strip()]
+    elif source == "TOKENSFREE_REAL_API_KEYS":
+        keys = [part.strip() for part in str(env[source]).replace(",", " ").split() if part.strip()]
+    elif source == "TOKENSFREE_REAL_API_KEY_FILE":
+        keys = _keys_from_file(env[source])
+    else:
+        keys = _keys_from_file(env[source])
     if not 1 <= len(keys) <= MAX_REAL_KEYS:
-        raise ValueError("TOKENSFREE_REAL_API_KEYS must contain 1..%d keys" % MAX_REAL_KEYS)
-    if any(len(key) > 512 for key in keys):
-        raise ValueError("an API key is longer than 512 characters")
+        raise ValueError("real provider needs 1..%d API keys" % MAX_REAL_KEYS)
+    if any(not key or len(key) > 512 for key in keys):
+        raise ValueError("invalid API key length")
     return tuple(keys)
 
 
@@ -247,6 +272,7 @@ def build_real_runtime(*, config, env, clock=time.time, storage=None, timeout=15
             authorized=frozenset(spec.name for spec in specs),
             clock=clock,
             storage=storage,
+            rotation=RoundRobin(),
         ),
         storage=storage,
     )

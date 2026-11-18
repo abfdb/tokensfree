@@ -49,3 +49,18 @@ def select_account(accounts, *, provider, now, exclude_ids=frozenset(), in_fligh
     if not candidates:
         return None
     return min(candidates, key=lambda account: (account.last_used_at is not None, account.last_used_at or 0.0, account.id))
+
+
+class RoundRobin:
+    """Rotate a candidate order per call so no single key always pays for the first attempt."""
+
+    def __init__(self):
+        self._next = 0
+
+    def order(self, items):
+        items = tuple(items)
+        if not items:
+            return items
+        start = self._next % len(items)
+        self._next = (self._next + 1) % len(items)
+        return items[start:] + items[:start]

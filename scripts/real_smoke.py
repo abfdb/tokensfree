@@ -31,9 +31,14 @@ PACKAGED_ELECTRON = pathlib.Path(r"D:\deepseek_harness\DeepSeek Harness.exe")
 REAL_KEYS = (
     "TOKENSFREE_REAL_PROVIDER",
     "TOKENSFREE_REAL_BASE_URL",
-    "TOKENSFREE_REAL_API_KEY",
     "TOKENSFREE_REAL_MODEL",
     "TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT",
+)
+KEY_SOURCE_VARS = (
+    "TOKENSFREE_REAL_API_KEY",
+    "TOKENSFREE_REAL_API_KEYS",
+    "TOKENSFREE_REAL_API_KEY_FILE",
+    "TOKENSFREE_REAL_API_KEYS_FILE",
 )
 FIXTURE_SSE = (
     'data: {"choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n'
@@ -171,6 +176,8 @@ def main():
         mode = "fixture"
     else:
         missing = [key for key in REAL_KEYS if not str(env.get(key, "")).strip()]
+        if not any(str(env.get(key, "")).strip() for key in KEY_SOURCE_VARS):
+            missing.append("TOKENSFREE_REAL_API_KEY")
         if env.get("TOKENSFREE_ENABLE_REAL") != "1":
             missing.append("TOKENSFREE_ENABLE_REAL=1")
         if missing:
