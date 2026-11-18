@@ -170,8 +170,13 @@ def parse_chat_payload(payload, *, developer_role_policy="map", max_messages=32,
         if raw_usage and not stream:
             _reject()
         include_usage = bool(raw_usage)
-    max_tokens = payload.get("max_tokens", DEFAULT_MAX_TOKENS)
-    if type(max_tokens) is not int or not 1 <= max_tokens <= 1_000_000:
+    max_tokens = payload.get("max_tokens")
+    max_completion_tokens = payload.get("max_completion_tokens")
+    if max_tokens is not None and max_completion_tokens is not None:
+        _reject()  # ambiguous: the two aliases must not disagree
+    if max_tokens is None:
+        max_tokens = max_completion_tokens if max_completion_tokens is not None else DEFAULT_MAX_TOKENS
+    if type(max_tokens) is not int or isinstance(max_tokens, bool) or not 1 <= max_tokens <= 1_000_000:
         _reject()
     messages, needs_tools_from_messages = _parse_messages(
         payload.get("messages"), developer_role_policy, max_messages, max_content_chars
@@ -187,6 +192,8 @@ def parse_chat_payload(payload, *, developer_role_policy="map", max_messages=32,
         raise RequestRejected(ErrorCode.unsupported_capability)
     temperature = _optional_number(payload, "temperature", 0.0, 2.0)
     top_p = _optional_number(payload, "top_p", 0.0, 1.0)
+    presence_penalty = _optional_number(payload, "presence_penalty", -2.0, 2.0)
+    frequency_penalty = _optional_number(payload, "frequency_penalty", -2.0, 2.0)
     stop = _parse_stop(payload.get("stop"))
     seed = payload.get("seed")
     if seed is not None and (type(seed) is not int or not 0 <= seed <= 2 ** 31 - 1):
@@ -224,6 +231,8 @@ def parse_chat_payload(payload, *, developer_role_policy="map", max_messages=32,
         seed=seed,
         response_format=response_format,
         stream_include_usage=include_usage,
+        presence_penalty=presence_penalty,
+        frequency_penalty=frequency_penalty,
     )
     return ParsedChat(
         request=request,

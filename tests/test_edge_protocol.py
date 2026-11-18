@@ -276,3 +276,35 @@ def test_chat_response_created_is_a_real_timestamp():
 
     body = build_chat_response(request_id="req-1", model="m", content="hi")
     assert isinstance(body["created"], int) and body["created"] > 0
+
+
+
+def test_max_completion_tokens_alias_is_accepted():
+    parsed = parse_chat_payload(payload(max_completion_tokens=200))
+    assert parsed.request.max_tokens == 200
+
+
+def test_both_token_limit_aliases_are_rejected():
+    from tokensfree.edge.protocol import RequestRejected
+
+    with pytest.raises(RequestRejected):
+        parse_chat_payload(payload(max_tokens=100, max_completion_tokens=200))
+
+
+@pytest.mark.parametrize("value", [0, -5, 1_000_001, "100", True, 1.5])
+def test_invalid_max_completion_tokens_are_rejected(value):
+    from tokensfree.edge.protocol import RequestRejected
+
+    with pytest.raises(RequestRejected):
+        parse_chat_payload(payload(max_completion_tokens=value))
+
+
+def test_penalties_are_kept_and_validated():
+    from tokensfree.edge.protocol import RequestRejected
+
+    parsed = parse_chat_payload(payload(presence_penalty=-0.5, frequency_penalty=1.2))
+    assert parsed.request.presence_penalty == -0.5
+    assert parsed.request.frequency_penalty == 1.2
+    for overrides in ({"presence_penalty": -3}, {"frequency_penalty": 2.5}, {"presence_penalty": "x"}):
+        with pytest.raises(RequestRejected):
+            parse_chat_payload(payload(**overrides))

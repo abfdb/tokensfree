@@ -236,3 +236,12 @@ def test_stream_include_usage_is_forwarded(json_upstream):
     sent = json.loads(adapter._body(streaming, stream=True).decode("utf-8"))
     assert sent["stream"] is True
     assert sent["stream_options"] == {"include_usage": True}
+
+
+
+def test_penalties_are_forwarded(json_upstream):
+    adapter = OpenAICompatAdapter(base_url(json_upstream), KEY)
+    asyncio.run(adapter.complete(request(presence_penalty=-0.5, frequency_penalty=1.2), admission()))
+    sent = json_upstream.requests[-1]
+    assert sent["presence_penalty"] == -0.5
+    assert sent["frequency_penalty"] == 1.2

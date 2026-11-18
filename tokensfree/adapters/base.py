@@ -26,6 +26,8 @@ class ChatRequest:
     seed: int | None = None
     response_format: dict | None = None
     stream_include_usage: bool = False
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
 
 
 @dataclass(frozen=True)

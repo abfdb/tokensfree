@@ -94,6 +94,10 @@ class OpenAICompatAdapter:
             payload["seed"] = request.seed
         if request.response_format is not None:
             payload["response_format"] = dict(request.response_format)
+        if request.presence_penalty is not None:
+            payload["presence_penalty"] = request.presence_penalty
+        if request.frequency_penalty is not None:
+            payload["frequency_penalty"] = request.frequency_penalty
         if stream and request.stream_include_usage:
             payload["stream_options"] = {"include_usage": True}
         return json.dumps(payload).encode("utf-8")
