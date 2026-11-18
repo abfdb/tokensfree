@@ -294,7 +294,7 @@ DSH 的自定义 provider 走 `dsh-llm-pi-ai` 的 hand-declared route。实测�
 | 真实供应商装配 + 探针 + 验收 + 证据快照 | ✅ 等填入智谱 key（D2 已选定） | `adapters/openai_compat.py`、`runtime.build_real_runtime`、`scripts/{real_probe,real_smoke,evidence_snapshot}.py`、`docs/providers/zhipu.md` |
 | 多额度池与账号生命周期（多 key / 轮转 / 熔断持久化 / 配额账本 / 运维 CLI） | ✅ | `runtime.py`、`store/repos.py`、`router/{health,execute}.py`、`edge/app_core.py`、`scripts/accounts_admin.py` |
 | DSH 端到端冒烟 + 用户旅程 | ✅ | `scripts/dsh_smoke.py`、`scripts/journey_smoke.py` |
-| 系统凭证库（keyring） | ⛔ 未实现（key 来自环境变量/文件） | `docs/credential-boundary.md` |
+| 系统凭据库（Windows Credential Manager） | ✅ 已实现并本机验证；跨平台 keyring 未实现 | `tokensfree/credstore.py`、`scripts/credential_store.py`、`docs/credential-boundary.md` |
 
 ### 与计划的偏离（均为显式裁决）
 
@@ -309,7 +309,7 @@ DSH 的自定义 provider 走 `dsh-llm-pi-ai` 的 hand-declared route。实测�
 
 ### 未完成的验收
 
-G1（DSH 工具往返）已由 `scripts/dsh_smoke.py` 与用户旅程验证；G2（默认零外发的 HTTP 侧证明）仍只在配置/断言层面保证（跨平台零外发仍未证明）；G5 的 keyring 部分未实现。G3/G4/G6/G7 已由当前测试覆盖。
+G1（DSH 工具往返）已由 `scripts/dsh_smoke.py` 与用户旅程验证；G2（默认零外发的 HTTP 侧证明）仍只在配置/断言层面保证（跨平台零外发仍未证明）；G5 的 Windows 凭据管理器部分已实现并验证；跨平台 keyring 未实现。G3/G4/G6/G7 已由当前测试覆盖。
 
 
 ### 附录 E：真实 DSH 冒烟结果（2026-11-18）

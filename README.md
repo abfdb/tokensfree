@@ -130,7 +130,7 @@ python check_dsh_contract.py # 8 组拒绝行为矩阵，退出 0 表示符合�
 | P4 真实调用闸门（开关 + 授权 + 免费证据三条件）+ 环境变量装配（`--real`） | ✅ 默认关闭；D2 选定智谱，等填入 key 联调 |
 | 真实供应商装配与验收脚本（`--real` / `real_probe.py` / `real_smoke.py` / 证据快照，默认关闭） | ✅ 等填入智谱 key |
 | 真实模型联调 | ⛔ 等填入 key（D2 已选定智谱） |
-| 系统凭证库（keyring） | ⛔ 未实现（key 来自环境变量或文件） |
+| 系统凭据库 | ✅ Windows Credential Manager 已实现并验证；跨平台 keyring ⛔ |
 
 **当前验证状态（2026-11-18）**
 

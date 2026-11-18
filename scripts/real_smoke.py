@@ -42,6 +42,7 @@ KEY_SOURCE_VARS = (
     "TOKENSFREE_REAL_API_KEYS",
     "TOKENSFREE_REAL_API_KEY_FILE",
     "TOKENSFREE_REAL_API_KEYS_FILE",
+    "TOKENSFREE_REAL_API_KEY_STORE",
 )
 FIXTURE_SSE = (
     'data: {"choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n'

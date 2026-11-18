@@ -10,7 +10,7 @@
 
 ## Windows 选择
 
-拟优先使用 Windows Win32 Credential Manager 的 generic credential，不采用随意可替换的文件加密方案。将来 target namespace 应固定为 tokensfree/provider/alias，精确查找而非枚举全部用户凭据；创建/变更需用户批准。持久化策略应显式本机，不能默认为跨设备漫游。该选择尚未实际实现或在 Windows 验证。
+拟优先使用 Windows Win32 Credential Manager 的 generic credential，不采用随意可替换的文件加密方案。将来 target namespace 应固定为 tokensfree/provider/alias，精确查找而非枚举全部用户凭据；创建/变更需用户批准。持久化策略应显式本机，不能默认为跨设备漫游。**2026-11-18 更新：Windows 原生实现已完成**（`tokensfree/credstore.py`）：generic credential、target 固定为 `tokensfree/<provider>/<alias>`、`CRED_PERSIST_LOCAL_MACHINE`（不漫游）、精确查找不枚举；`scripts/credential_store.py` 提供 set/status/clear；`TOKENSFREE_REAL_API_KEY_STORE` 让运行时直接读取。本机 Windows 已实测写入/读取/删除/缺失 fail-closed，14 项测试覆盖（其他平台自动跳过）。**跨平台（macOS Keychain / Linux Secret Service / keyring）仍未实现**，非 Windows 平台会明确失败而不是回退明文。
 
 Microsoft 文档说明 `CredReadW` 读取当前登录会话凭据集合，`CredWriteW` 创建/修改凭据；`CREDENTIALW` 区分凭据类型和持久化方式。它是 OS 存储保护，不等于每次读取都有用户确认，更不能假定相同登录身份下任意程序都无法访问。
 

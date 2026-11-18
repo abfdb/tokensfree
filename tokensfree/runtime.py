@@ -206,6 +206,7 @@ KEY_SOURCE_VARS = (
     "TOKENSFREE_REAL_API_KEYS",
     "TOKENSFREE_REAL_API_KEY_FILE",
     "TOKENSFREE_REAL_API_KEYS_FILE",
+    "TOKENSFREE_REAL_API_KEY_STORE",
 )
 
 
@@ -231,6 +232,15 @@ def real_keys_from_env(env):
         keys = [part.strip() for part in str(env[source]).replace(",", " ").split() if part.strip()]
     elif source == "TOKENSFREE_REAL_API_KEY_FILE":
         keys = _keys_from_file(env[source])
+    elif source == "TOKENSFREE_REAL_API_KEY_STORE":
+        from tokensfree.credstore import CredentialError, load_secret
+
+        store = str(env[source]).strip()
+        provider_name, _sep, alias = store.partition("/")
+        try:
+            keys = [load_secret(provider_name, alias=alias or "env-key")]
+        except CredentialError as error:
+            raise ValueError("cannot read the system credential store: %s" % error) from None
     else:
         keys = _keys_from_file(env[source])
     if not 1 <= len(keys) <= MAX_REAL_KEYS:
