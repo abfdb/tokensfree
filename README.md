@@ -60,7 +60,18 @@ python -m pytest -q          # 119 项，Windows/macOS/Linux 三平台一致
 python check_dsh_contract.py # 8 项契约矩阵，退出 0 表示拒绝行为符合预期
 ```
 
-窗口环境为 Python 3.10+。当前阶段：P0 工程基线（设计见 [docs/superpowers/specs/](docs/superpowers/specs/)，计划见 [docs/superpowers/plans/](docs/superpowers/plans/)）。JS 通过 `node --check static/app.js`。真实供应商接入、SSE 与工具调用仍未实现。
+推荐在虚拟环境中安装开发依赖：`python -m venv .venv`，再 `.venv\Scripts\pip install -r requirements-dev.txt`（macOS/Linux 用 `.venv/bin/pip`）。之后的命令用 `.venv\Scripts\python` 代替 `python`。
+
+一条命令验收 P0：`python scripts/verify_p0.py`（lint → 测试 → 契约矩阵 → 密钥扫描）。
+
+| 阶段 | 状态 |
+|---|---|
+| P0 工程基线：CI（三平台 × 3 个 Python 版本）、统一错误契约、结构化日志、契约矩阵可注入 | ✅ 完成 |
+| P1 新内核 + 真实适配器（默认关闭） | ⬜ 未开始 |
+| P2 SSE + 工具调用 + DSH 闭环（MVP 完成线） | ⬜ 未开始 |
+| P3–P5 账号池 / 额度账本 / 并发 / 服务化 | ⬜ 未开始 |
+
+设计见 [docs/superpowers/specs/](docs/superpowers/specs/)，计划见 [docs/superpowers/plans/](docs/superpowers/plans/)。JS 通过 `node --check static/app.js`。真实供应商接入、SSE 与工具调用仍未实现。
 
 ## 项目结构
 `server.py` 路由与本地服务；`test_gateway.py` 自动测试；`static/` 极客控制台；`static/catalog/` 资源目录。运行状态不会写入源码。`package.json` 仅供开发预览，无 npm 依赖。
