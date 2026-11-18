@@ -79,3 +79,35 @@ def test_non_stream_request_to_streaming_only_runtime_is_rejected(upstream):
         assert json.loads(body)["error"]["code"] == "unsupported_capability"
     finally:
         runner.stop()
+
+
+
+def test_concurrent_streams_get_distinct_request_ids(upstream):
+    import re
+    import threading
+
+    runner, port = start_backend(upstream)
+    results = {}
+
+    def worker(index):
+        status, headers, body = request(port, PAYLOAD)
+        results[index] = (status, body.decode("utf-8"))
+
+    try:
+        threads = [threading.Thread(target=worker, args=(index,)) for index in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    finally:
+        runner.stop()
+
+    assert len(results) == 8
+    request_ids = set()
+    for status, text in results.values():
+        assert status == 200
+        assert text.strip().endswith("data: [DONE]")
+        ids = re.findall(r'"id": "(req-[0-9a-f]+)"', text)
+        assert ids, text[:200]
+        request_ids.add(ids[0])
+    assert len(request_ids) == 8
