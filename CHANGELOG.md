@@ -24,6 +24,7 @@
 - 流式核心：首帧前可回退、首帧后错误终态、断流必有终态帧（`edge/stream_core.py`）
 - HTTP 后端契约、ASGI 适配器、可运行的 stdlib asyncio host（`edge/backend.py` / `asgi.py` / `host.py`）
 - 结构化访问日志（每请求一行，无 prompt）与 `x-request-id` 响应头
+- `/api/status` 含版本与运行时长；CLI 支持 `--version`
 - 真实调用闸门：开关 + 授权 + 未过期免费证据三者同时成立才放行（默认关闭）
 - 环境变量驱动的真实供应商装配（`--real` + `TOKENSFREE_REAL_*`）：D2 之后只需配置，不用改代码
 - 真实供应商验收脚本 `scripts/real_smoke.py`（`--fixture` 自检模式用本地假上游，真实模式驱动 DSH）

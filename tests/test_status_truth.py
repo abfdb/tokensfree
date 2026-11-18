@@ -97,3 +97,13 @@ def test_status_breaker_snapshot_failure_is_contained():
 
     payload = status_of(backend_for(MOCK, CONFIG_OFF, breakers={"alpha": BrokenBreaker()}))
     assert payload["breakers"]["alpha"] == {"state": "unknown"}
+
+
+
+def test_status_reports_version_and_uptime():
+    payload = status_of(backend_for(MOCK, CONFIG_OFF))
+    from tokensfree import __version__
+
+    assert payload["version"] == __version__
+    assert isinstance(payload["uptime_s"], (int, float))
+    assert payload["uptime_s"] >= 0

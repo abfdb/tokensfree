@@ -40,3 +40,21 @@ def test_module_without_token_fails_closed():
     )
     assert result.returncode != 0
     assert "TOKENSFREE_LOCAL_TOKEN" in (result.stdout + result.stderr)
+
+
+
+def test_version_flag_prints_the_version():
+    result = subprocess.run(
+        [sys.executable, "-m", "tokensfree", "--version"],
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+        env=dict(os.environ),
+    )
+    assert result.returncode == 0
+    from tokensfree import __version__
+
+    assert __version__ in (result.stdout + result.stderr)

@@ -5,8 +5,11 @@ policy (routes, auth, parsing, routing, retries, persistence) stays in the kerne
 MemoryBackend is the reference implementation the contract tests run against.
 """
 import json
+import time
 import uuid
 from dataclasses import dataclass, replace
+
+from tokensfree import __version__
 
 from tokensfree.edge.app_core import breaker_lookup, handle_chat
 from tokensfree.edge.auth import bearer_token, origin_allowed, token_matches
@@ -50,6 +53,7 @@ class MemoryBackend:
         self.services = services
         self.port = port
         self.token = resolved
+        self.started_at = time.time()
 
     def _json(self, status, payload, extra_headers=None):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -95,7 +99,9 @@ class MemoryBackend:
             except Exception:
                 breakers[str(name)] = {"state": "unknown"}
         return {
+            "version": __version__,
             "simulation": simulation,
+            "uptime_s": round(time.time() - self.started_at, 1),
             "persistence": persistence,
             "breakers": breakers,
             "providers": providers,

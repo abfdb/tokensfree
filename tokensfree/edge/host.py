@@ -221,12 +221,14 @@ def main():
     import argparse
     import os
 
+    from tokensfree import __version__
     from tokensfree.config import load_config
     from tokensfree.edge.asgi import make_asgi_app
     from tokensfree.edge.backend import MemoryBackend
     from tokensfree.runtime import Storage, build_loopback_streaming_runtime, build_mock_runtime, build_real_runtime
 
     parser = argparse.ArgumentParser(description="Serve the tokensfree ASGI app on loopback")
+    parser.add_argument("--version", action="version", version="tokensfree " + __version__)
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument("--loopback", type=int, default=None,
                         help="port of a local SSE fixture upstream; enables streaming instead of the mock runtime")
