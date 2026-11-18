@@ -144,6 +144,10 @@ class MemoryBackend:
         except (ValueError, UnicodeError, RecursionError):
             return self._error(ErrorCode.invalid_request, request_id)
         if isinstance(payload, dict) and payload.get("stream") is True:
+            if request.headers.get("idempotency-key"):
+                # A stream cannot be replayed byte-for-byte, so silently ignoring the
+                # key would break the exactly-once promise. Refuse instead.
+                return self._error(ErrorCode.invalid_request, request_id)
             started = time.time()
             plan = prepare_stream(payload, services=self.services, request_id=request_id)
             if isinstance(plan, StreamFailure):

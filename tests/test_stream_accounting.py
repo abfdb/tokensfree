@@ -58,6 +58,7 @@ def services_with(storage, candidates):
         adapters={name: adapter for name, adapter in candidates},
         admit=lambda candidate: "admission",
         authorized=names,
+        idempotency=storage.idempotency,
         ledger=storage.ledger,
         events=storage.events,
         accounts=storage.accounts,
@@ -131,3 +132,52 @@ def test_pre_stream_rejection_is_recorded(storage):
     assert response.status == 400
     events = storage.events.recent(5)
     assert events and events[0]["outcome"] == "error"
+
+
+
+def test_stream_with_idempotency_key_is_rejected(storage):
+    services = services_with(storage, [("alpha", FakeStreamAdapter(OK_EVENTS))])
+    backend = MemoryBackend(config=CONFIG, services=services, port=8765, token=TOKEN)
+    request = EdgeRequest(
+        method="POST",
+        path="/v1/chat/completions",
+        headers={
+            "host": "127.0.0.1:8765",
+            "authorization": "Bearer " + TOKEN,
+            "content-type": "application/json",
+            "idempotency-key": "stream-key",
+        },
+        body=b'{"model": "tokensfree-auto", "messages": [{"role": "user", "content": "hi"}], "stream": true}',
+    )
+    response = asyncio.run(backend.handle(request))
+    assert response.status == 400
+    payload = __import__("json").loads(response.body)
+    assert payload["error"]["code"] == "invalid_request"
+    assert response.stream is None
+
+
+def test_non_streaming_idempotency_still_works(storage):
+    services = services_with(storage, [("alpha", FakeStreamAdapter(OK_EVENTS))])
+    adapter = services.adapters["alpha"]
+    adapter.complete = None  # JSON path requires complete; use a tiny shim below
+    async def complete(request, admission):
+        from tokensfree.adapters.base import ChatResult
+
+        return ChatResult(content="ok")
+    adapter.complete = complete
+    backend = MemoryBackend(config=CONFIG, services=services, port=8765, token=TOKEN)
+    request = EdgeRequest(
+        method="POST",
+        path="/v1/chat/completions",
+        headers={
+            "host": "127.0.0.1:8765",
+            "authorization": "Bearer " + TOKEN,
+            "content-type": "application/json",
+            "idempotency-key": "json-key",
+        },
+        body=b'{"model": "tokensfree-auto", "messages": [{"role": "user", "content": "hi"}]}',
+    )
+    first = asyncio.run(backend.handle(request))
+    second = asyncio.run(backend.handle(request))
+    assert first.status == 200 and second.status == 200
+    assert __import__("json").loads(first.body)["id"] == __import__("json").loads(second.body)["id"]
