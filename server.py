@@ -3,6 +3,7 @@ import json, time, uuid, threading, secrets, argparse, hashlib, hmac, re, copy, 
 from collections import OrderedDict
 from pathlib import Path
 from providers import ProviderSpec, MockAdapter, evaluate
+from tokensfree.errors import ErrorCode, http_error
 from agent_fixture import Roundtrip, SENTINEL, sse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -31,7 +32,8 @@ class Gateway:
             self.scenario = scenario
             self.cooldowns = {}
             self.events = []
-    def dispatch(self, payload, idempotency_key=None):
+    def dispatch(self, payload, idempotency_key=None, *, request_id=None):
+        if request_id is None: request_id = 'req-' + uuid.uuid4().hex
         """Retry protection, not durable exactly-once execution.
 
         Cache responses (including failures) for five minutes, bounded to 100 keys.
@@ -39,7 +41,7 @@ class Gateway:
         does not forget keys: an uncertain retry must not become a new operation.
         """
         if idempotency_key is None:
-            return self.run(payload)
+            return self.run(payload, request_id=request_id)
         if not isinstance(idempotency_key, str) or not re.fullmatch(r'[A-Za-z0-9._:-]{1,128}', idempotency_key):
             raise ValueError('invalid idempotency key')
         serialized = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()
@@ -52,15 +54,15 @@ class Gateway:
             if idempotency_key in self.cache:
                 _, original, response = self.cache[idempotency_key]
                 if not hmac.compare_digest(original, fingerprint):
-                    return 409, {'error': {'code': 'idempotency_conflict', 'message': '同一请求键不能用于不同内容。请为新请求生成新键。'}}
+                    return http_error(ErrorCode.idempotency_conflict, request_id)
                 return copy.deepcopy(response)
             if len(self.cache) >= 100:
-                return 503, {'error': {'code': 'idempotency_capacity', 'message': '去重缓存已满，请等待旧记录到期。请求未执行。'}}
-            response = self.run(payload)
+                return http_error(ErrorCode.idempotency_capacity, request_id)
+            response = self.run(payload, request_id=request_id)
             self.cache[idempotency_key] = (time.monotonic() + 300, fingerprint, copy.deepcopy(response))
             return response
 
-    def run(self, payload):
+    def run(self, payload, *, request_id=None):
         if not isinstance(payload, dict): raise ValueError('request must be an object')
         if payload.get('model') != 'tokensfree-auto': raise ValueError('only tokensfree-auto is available')
         if payload.get('stream', False) is not False: raise ValueError('streaming not implemented')
@@ -74,7 +76,7 @@ class Gateway:
         if not isinstance(authorized, list) or not authorized or any(not isinstance(x, str) or x not in ('mock-alpha', 'mock-beta') for x in authorized):
             raise ValueError('allowed_providers must be a nonempty subset of mock providers')
         with self.lock:
-            request_id = 'mock-' + uuid.uuid4().hex[:12]
+            if request_id is None: request_id = 'req-' + uuid.uuid4().hex
             trace = []
             for i, result in enumerate(SCENARIOS[self.scenario]):
                 name = ['mock-alpha', 'mock-beta'][i]
@@ -96,8 +98,10 @@ class Gateway:
                 if result == 'limited': self.cooldowns[name] = time.time()+30
                 if result == 'unavailable': self.cooldowns[name] = time.time()+10
                 if result == 'refusal':
-                    return 422, {'error':{'code':'mock_safety_refusal','message':'模拟安全拒绝：停止，不通过切换规避。'},'trace':trace}
-            return 503, {'error':{'code':'no_free_provider','message':'没有可用的模拟免费供应商。已停止，不回退付费。'},'trace':trace}
+                    status, body = http_error(ErrorCode.refusal, request_id); body['trace'] = trace
+                    return status, body
+            status, body = http_error(ErrorCode.no_free_provider, request_id); body['trace'] = trace
+            return status, body
     def provider_spec(self, name, index):
         # Synthetic expiring evidence for policy tests, not platform verification.
         unknown = self.scenario == 'all_unknown_cost' or (self.scenario == 'unknown_cost' and index == 0)
@@ -135,7 +139,8 @@ class Handler(BaseHTTPRequestHandler):
         hosts = {f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}'}
         return self.headers.get('Host') in hosts and (not self.headers.get('Origin') or self.headers['Origin'] in {'http://'+x for x in hosts})
     def do_GET(self):
-        if not self.allowed(): return self.send(403,{'error':'Host or Origin rejected'})
+        rid = 'req-' + uuid.uuid4().hex
+        if not self.allowed(): return self.send(*http_error(ErrorCode.origin_rejected, rid))
         if self.path == '/api/session': return self.send(200,{'token':self.server.token})
         if self.path == '/api/status': return self.send(200,self.server.gateway.snapshot())
         if self.path == '/v1/models':
@@ -145,19 +150,20 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200,{'object':'list','data':models})
         paths={'/':'index.html','/app.js':'app.js','/style.css':'style.css','/catalog/':'catalog/index.html','/catalog/app.js':'catalog/app.js','/catalog/data.js':'catalog/data.js','/catalog/style.css':'catalog/style.css'}
         file=paths.get(self.path)
-        if not file: return self.send(404,{'error':'not found'})
+        if not file: return self.send(*http_error(ErrorCode.not_found, rid))
         mime={'html':'text/html','js':'text/javascript','css':'text/css'}[file.rsplit('.',1)[1]]+'; charset=utf-8'
         self.send(200,(ROOT/file).read_bytes(),mime)
     def do_POST(self):
-        if not self.allowed(): return self.send(403,{'error':'Host or Origin rejected'})
+        rid = 'req-' + uuid.uuid4().hex
+        if not self.allowed(): return self.send(*http_error(ErrorCode.origin_rejected, rid))
         token = self.headers.get('Authorization','').encode('utf-8')
-        if not secrets.compare_digest(token,('Bearer '+self.server.token).encode('utf-8')): return self.send(401,{'error':'local session token required'})
+        if not secrets.compare_digest(token,('Bearer '+self.server.token).encode('utf-8')): return self.send(*http_error(ErrorCode.unauthorized, rid))
         try:
             if self.headers.get('Transfer-Encoding') is not None or len(self.headers.get_all('Content-Length',[])) != 1:
                 raise ValueError('ambiguous framing')
             n=int(self.headers.get('Content-Length','0'))
             maximum=262144 if self.server.roundtrip is not None else 65536
-            if n<1 or n>maximum: return self.send(413,{'error':'body size outside configured limit'})
+            if n<1 or n>maximum: return self.send(*http_error(ErrorCode.payload_too_large, rid))
             self.connection.settimeout(5)
             payload=json.loads(self.rfile.read(n))
             if self.path == '/api/scenario':
@@ -165,14 +171,14 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == '/v1/chat/completions':
                 if isinstance(payload,dict) and payload.get('model') == 'tokensfree-fixture':
                     if self.server.roundtrip is None:
-                        return self.send(400,{'error':'agent fixture is not enabled'})
+                        return self.send(*http_error(ErrorCode.unsupported_capability, rid))
                     # Single-use state commits before SSE output. Never use text
                     # idempotency cache to replay an emitted tool instruction.
                     events=self.server.roundtrip.accept(payload)
                     return self.send(200,sse(events),'text/event-stream')
-                status,data=self.server.gateway.dispatch(payload, self.headers.get('Idempotency-Key')); return self.send(status,data)
-            return self.send(404,{'error':'not found'})
-        except (ValueError, TypeError, AttributeError, TimeoutError, RecursionError): return self.send(400,{'error':'Invalid request or unsupported capability'})
+                status,data=self.server.gateway.dispatch(payload, self.headers.get('Idempotency-Key'), request_id=rid); return self.send(status,data)
+            return self.send(*http_error(ErrorCode.not_found, rid))
+        except (ValueError, TypeError, AttributeError, TimeoutError, RecursionError): return self.send(*http_error(ErrorCode.invalid_request, rid))
 
 class LocalServer(ThreadingHTTPServer):
     fixture_directory = None
