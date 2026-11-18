@@ -145,7 +145,7 @@ def build_chat_response(*, request_id, model, content, usage=None, finish_reason
     if usage is not None:
         body["usage"] = usage
     if trace is not None:
-        body["tokensfree"] = {"trace": list(trace)}
+        body["tokensfree"] = {"trace": [list(attempt) for attempt in trace]}
     return body
 
 
