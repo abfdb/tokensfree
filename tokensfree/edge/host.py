@@ -112,11 +112,13 @@ class AsgiHost:
         self._stop = None
         self.loop = None
 
-    async def run_forever(self):
+    async def run_forever(self, *, on_ready=None):
         self.loop = asyncio.get_running_loop()
         self._stop = asyncio.Event()
         self._server = await asyncio.start_server(self._handle, self.host, self.port, limit=MAX_HEADER_BYTES + 4096)
         self.port = self._server.sockets[0].getsockname()[1]
+        if on_ready is not None:
+            on_ready(self.port)
         try:
             await self._stop.wait()
         finally:
@@ -259,16 +261,25 @@ def main():
     else:
         runtime = build_loopback_streaming_runtime(args.loopback, config=config, storage=storage)
         mode = "loopback streaming runtime -> 127.0.0.1:%d" % args.loopback
-    backend = MemoryBackend(config=config, services=runtime.services, port=args.port, token=config.local_token)
+    # --port 0 asks the OS for a free port; the real one is known only after binding,
+    # so the backend is told the final port in on_ready (before any handler runs).
+    backend = MemoryBackend(config=config, services=runtime.services, port=args.port or 8766, token=config.local_token)
     host = AsgiHost(make_asgi_app(backend), port=args.port, max_body=config.max_body_bytes)
-    print(
-        "tokensfree ASGI backend: http://127.0.0.1:%d [%s] (db=%s, Ctrl+C to stop)" % (args.port, mode, args.db),
-        flush=True,
-    )
+
+    def announce(port):
+        backend.port = port
+        print(
+            "tokensfree ASGI backend: http://127.0.0.1:%d [%s] (db=%s, Ctrl+C to stop)" % (port, mode, args.db),
+            flush=True,
+        )
+
     try:
-        asyncio.run(host.run_forever())
-    except KeyboardInterrupt:
-        host.stop()
+        try:
+            asyncio.run(host.run_forever(on_ready=announce))
+        except KeyboardInterrupt:
+            host.stop()
+    except OSError as error:
+        raise SystemExit("cannot bind 127.0.0.1:%d: %s" % (args.port, error.strerror or error)) from None
     finally:
         storage.close()
 

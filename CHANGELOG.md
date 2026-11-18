@@ -26,6 +26,7 @@
 - 账号状态参与路由：exhausted / invalid / 冷却中的 key 在准入阶段被跳过（`/api/status` 可见 `account_*` 原因）
 - 替换 key 自动恢复账号：指纹变化时重置为 active 并清除冷却；同一 key 重启不会重置状态
 - 运维工具：`/api/status` 增加账号摘要（状态/冷却/已计费请求数）与每个 provider 的模型/仿真标记/证据到期时间，`scripts/accounts_admin.py` 支持列出、激活、清除冷却
+- 启动体验：`--port 0` 自动选空闲端口并打印真实端口；端口占用返回一行明确错误而不是 traceback
 - SQLite 持久化：迁移、幂等键、只增账本、事件（`store/`），并接入可运行服务（`--db`，默认进程内）
 
 **边缘与协议**
