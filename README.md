@@ -126,7 +126,7 @@ python check_dsh_contract.py # 8 组拒绝行为矩阵，退出 0 表示符合�
 | P2 真实 DSH headless 端到端（合成上游，工具往返） | ✅ 已验证 |
 | P3 持久化：迁移 / 幂等 / 只增账本 / 事件（已接入可运行服务，`--db` 可跨重启） | ✅ 完成 |
 | P4 真实调用闸门（开关 + 授权 + 免费证据三条件）+ 环境变量装配（`--real`） | ✅ 默认关闭，等 D2 开启 |
-| 真实供应商装配与验收脚本（`--real` / `real_smoke.py`，默认关闭） | ✅ 等 D2 填入环境变量 |
+| 真实供应商装配与验收脚本（`--real` / `real_probe.py` / `real_smoke.py` / 证据快照，默认关闭） | ✅ 等 D2 填入 key |
 | 真实模型联调 / 系统凭证库（keyring） | ⛔ 等 D2 |
 
 **当前验证状态（2026-11-18）**
@@ -134,7 +134,7 @@ python check_dsh_contract.py # 8 组拒绝行为矩阵，退出 0 表示符合�
 - `scripts/verify_p0.py` → P0 OK（ruff / pytest / 契约矩阵 / 导入出口门禁 / **真实进程用户旅程** / 密钥扫描）
 - 干净克隆 → venv → 安装依赖 → `verify_p0.py` → P0 OK（可复现）
 - 真实 DSH 0.2.2-rc.1 headless + 合成上游：流式、23 个工具透传、`read` 工具往返、最终文本、退出码 0 全部通过（`scripts/dsh_smoke.py`）
-- P0–P4 内核、多额度池（多 key / key 文件 / 轮转）、真实调用闸门、真实供应商装配与审计修复共 529 项测试通过（2 项 opt-in 用例默认跳过）
+- P0–P4 内核、多额度池（多 key / key 文件 / 轮转 / 账号生命周期）、真实调用闸门、真实供应商装配与审计修复共 561 项测试通过（2 项 opt-in 用例默认跳过）
 - 用户旅程脚本（真实起服务、幂等、跨重启重放）已作为 `verify_p0` 的一部分
 - 真实供应商验收：`scripts/real_smoke.py --fixture` 与 `scripts/real_probe.py --fixture --stream --tools` 自检通过（本地假上游，无需 key、不联网）
 
