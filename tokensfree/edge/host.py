@@ -194,7 +194,14 @@ class AsgiHost:
                 state["done"] = True
             await writer.drain()
 
-        await self.app(scope, receive, send)
+        try:
+            await self.app(scope, receive, send)
+        except Exception:
+            # The app died before responding: answer 500 instead of dropping the socket.
+            # Once the head is out we can only close, never start a second response.
+            if not state["started"]:
+                await self._write_json_error(writer, 500, ErrorCode.internal_error)
+            return
         await writer.drain()
 
     async def _write_json_error(self, writer, status, code):

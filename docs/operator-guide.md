@@ -83,7 +83,7 @@ TOKENSFREE_DSH_SMOKE=1 .venv\Scripts\python -m pytest tests/test_dsh_smoke_gate.
 | 503 `no_free_provider` | 所有候选被准入拒绝/熔断/冷却；查看响应里的 `tokensfree.attempts` |
 | 429 `upstream_rate_limited` | 上游 429 且带可解析的 `Retry-After`；这是可重试限流 |
 | 502 `upstream_error` / `upstream_auth_failed` | 上游故障或凭据失效；后者会禁用该账号 |
-| 启动即退出 | 未设置 `TOKENSFREE_LOCAL_TOKEN`；新后端要求稳定令牌 |
+| 500 `internal_error` | 内核 bug；host 会返回结构化错误而不是直接断连，先看服务端日志里的 `request_id` |\n| 启动即退出 | 未设置 `TOKENSFREE_LOCAL_TOKEN`；新后端要求稳定令牌 |
 
 ## 6. 已知限制（诚实清单）
 

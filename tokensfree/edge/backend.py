@@ -77,7 +77,10 @@ class MemoryBackend:
             except Exception as denied:  # admission denials carry a stable reason string
                 state, reason = "blocked", getattr(denied, "reason", "denied")
             providers.append({"name": spec.name, "state": state, "policy_reason": reason})
-        return {"simulation": True, "providers": providers}
+        # Never claim simulation when a real provider is configured: after the gate opens
+        # this field must tell the truth.
+        simulation = all(getattr(spec, "simulation", True) for spec in self.services.specs)
+        return {"simulation": simulation, "providers": providers}
 
     async def _chat(self, request, request_id):
         try:
