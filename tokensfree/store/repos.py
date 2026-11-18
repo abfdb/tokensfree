@@ -87,6 +87,18 @@ class AccountsRepo:
     def get(self, account_id):
         return self._conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
 
+    def touch(self, account_id, *, now):
+        self._conn.execute("UPDATE accounts SET last_used_at = ? WHERE id = ?", (now, account_id))
+        self._conn.commit()
+
+    def set_cooldown(self, account_id, until):
+        self._conn.execute("UPDATE accounts SET cooldown_until = ? WHERE id = ?", (until, account_id))
+        self._conn.commit()
+
+    def clear_cooldown(self, account_id):
+        self._conn.execute("UPDATE accounts SET cooldown_until = NULL WHERE id = ?", (account_id,))
+        self._conn.commit()
+
     def set_status(self, account_id, status, *, now=None):
         self._conn.execute("UPDATE accounts SET status = ? WHERE id = ?", (status, account_id))
         if now is not None:
