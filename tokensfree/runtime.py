@@ -14,6 +14,7 @@ from tokensfree.adapters.mock import MockChatAdapter
 from tokensfree.config import AppConfig, load_config
 from tokensfree.edge.app_core import Services
 from tokensfree.router.admission import admit
+from tokensfree.router.health import CircuitBreaker
 from tokensfree.store.db import connect, migrate
 from tokensfree.store.repos import EventsRepo, IdempotencyRepo, LedgerRepo
 
@@ -64,7 +65,7 @@ class Runtime:
     storage: object = None
 
 
-def build_services(*, config, specs, adapters, authorized, clock=time.time, storage=None):
+def build_services(*, config, specs, adapters, authorized, clock=time.time, storage=None, breakers=None):
     specs = tuple(specs)
     names = {spec.name for spec in specs}
     if set(adapters) - names:
@@ -73,6 +74,13 @@ def build_services(*, config, specs, adapters, authorized, clock=time.time, stor
         raise ValueError("authorized provider has no spec")
     if not callable(clock):
         raise TypeError("clock must be callable")
+    if breakers is None:
+        breakers = {spec.name: CircuitBreaker() for spec in specs}
+    else:
+        breakers = dict(breakers)
+        unknown = set(breakers) - names
+        if unknown:
+            raise ValueError("breaker registered without a provider spec: " + ", ".join(sorted(unknown)))
 
     def gate(spec):
         return admit(spec, config, frozenset(authorized), clock())
@@ -85,6 +93,7 @@ def build_services(*, config, specs, adapters, authorized, clock=time.time, stor
         idempotency=getattr(storage, "idempotency", None),
         ledger=getattr(storage, "ledger", None),
         events=getattr(storage, "events", None),
+        breakers=breakers,
     )
 
 
