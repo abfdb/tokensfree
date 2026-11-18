@@ -5,6 +5,7 @@ Terminal rules (fail-closed):
 - after the first frame the error is final: emit one error event and stop;
 - a finished stream can never be extended by another provider.
 """
+import time
 from dataclasses import dataclass
 
 from tokensfree.adapters.base import NormalizedError
@@ -55,13 +56,20 @@ def prepare_stream(payload, *, services, request_id, developer_role_policy="map"
     return StreamPlan(parsed=parsed, candidates=tuple(candidates), request_id=request_id)
 
 
-async def iter_frames(plan, *, admit, max_attempts=2):
-    """Yield response bytes. Raises NormalizedError when no candidate produced a byte."""
+async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=time.time):
+    """Yield response bytes. Raises NormalizedError or NoProviderAvailable.
+
+    An open circuit skips its candidate without opening an upstream connection.
+    """
     trace = []
     last_error = None
     for spec, adapter in plan.candidates:
         if len(trace) >= max_attempts:
             break
+        breaker = breaker_for(spec) if breaker_for is not None else None
+        if breaker is not None and not breaker.allows(clock()):
+            trace.append((spec.name, "circuit_open"))
+            continue
         try:
             admission = admit(spec)
         except AdmissionDenied as denied:
@@ -87,6 +95,8 @@ async def iter_frames(plan, *, admit, max_attempts=2):
                         yield encoder.chunk(delta)
                     continue
                 if event.kind == "finish":
+                    if breaker is not None:
+                        breaker.record_success(clock())
                     if first:
                         yield encoder.chunk({"role": "assistant"})
                         emitted = True
@@ -95,6 +105,8 @@ async def iter_frames(plan, *, admit, max_attempts=2):
                     yield encoder.done()
                     return
         except NormalizedError as error:
+            if breaker is not None:
+                breaker.record_failure(clock())
             if emitted:
                 yield encoder.error(error.code)
                 return

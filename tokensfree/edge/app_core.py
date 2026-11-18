@@ -30,6 +30,7 @@ class Services:
     idempotency: object = None
     ledger: object = None
     events: object = None
+    breakers: object = None
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,14 @@ def _estimate_usage(messages, content):
         "total_tokens": prompt_tokens + completion_tokens,
         "estimated": True,
     }
+
+
+def breaker_lookup(services):
+    """Return spec -> CircuitBreaker, or None when no breakers are configured."""
+    mapping = getattr(services, "breakers", None)
+    if not mapping:
+        return None
+    return lambda spec: mapping.get(spec.name)
 
 
 def _fingerprint(payload):
@@ -93,7 +102,9 @@ async def _execute(payload, *, services, request_id, developer_role_policy):
     if candidates and not enriched:
         return _failed(ErrorCode.unsupported_capability, request_id)
     try:
-        execution = await execute(enriched, admit=services.admit, request=parsed.request)
+        execution = await execute(
+            enriched, admit=services.admit, request=parsed.request, breaker_for=breaker_lookup(services)
+        )
     except NormalizedError as error:
         return _failed(map_upstream_error(error), request_id, provider=error.provider or None)
     except NoProviderAvailable as unavailable:
