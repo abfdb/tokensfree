@@ -61,13 +61,17 @@ $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
 .venv\Scripts\python scripts/check_imports.py # 只跑静态出口门禁
 ~~~
 
-真实 DSH 冒烟（需要 node + 已解包的 DSH）：
+真实 DSH 冒烟（需要 node + 已解包的 DSH；路径可用环境变量覆盖，见下）：
 
 ~~~sh
 TOKENSFREE_DSH_SMOKE=1 .venv\Scripts\python -m pytest tests/test_dsh_smoke_gate.py -q
 # 或直接：
 .venv\Scripts\python scripts/dsh_smoke.py <node.exe> <dsh/lib/bin.js>
 ~~~
+
+也可以用环境变量代替参数：`TOKENSFREE_DSH_BIN=<dsh/lib/bin.js>`、`TOKENSFREE_NODE_BIN=<node.exe>`（未设置时依次尝试本机解包副本与打包 app.asar 副本）。
+
+**干净克隆自检**：`git clone` → 建 venv → `pip install -r requirements-dev.txt` → `python scripts/verify_p0.py` 应输出 `P0 OK`（已在 2026-11-18 实测通过，329 passed / 1 skipped）。
 
 ## 5. 故障排查
 

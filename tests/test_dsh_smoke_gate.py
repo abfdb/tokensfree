@@ -16,7 +16,9 @@ import sys
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-EXTRACTED_DSH = pathlib.Path(r"D:\IFan\dsh-extracted\node_modules\@deepseek-ai\dsh\lib\bin.js")
+EXTRACTED_DSH = pathlib.Path(
+    os.environ.get("TOKENSFREE_DSH_BIN", r"D:\IFan\dsh-extracted\node_modules\@deepseek-ai\dsh\lib\bin.js")
+)
 
 
 def load_smoke_module():

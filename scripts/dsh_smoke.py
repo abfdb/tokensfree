@@ -36,11 +36,21 @@ PACKAGED_ELECTRON = pathlib.Path(r"D:\deepseek_harness\DeepSeek Harness.exe")
 def resolve_runtime(argv):
     """Pick the DSH entry point and the node binary that can read it.
 
-    A plain node cannot read inside app.asar, so the packaged copy needs
-    Electron's node. An extracted copy can run under plain node.
+    Order: explicit CLI args, then TOKENSFREE_DSH_BIN / TOKENSFREE_NODE_BIN,
+    then a machine-local extracted copy, then the packaged app.asar copy.
+    A plain node cannot read inside app.asar, so that copy needs Electron's node.
     """
     if len(argv) > 2:
         return pathlib.Path(argv[2]), pathlib.Path(argv[1])
+    env_bin = os.environ.get("TOKENSFREE_DSH_BIN")
+    if env_bin:
+        bin_path = pathlib.Path(env_bin)
+        env_node = os.environ.get("TOKENSFREE_NODE_BIN")
+        if env_node:
+            return bin_path, pathlib.Path(env_node)
+        if "app.asar" in env_bin:
+            return bin_path, PACKAGED_ELECTRON
+        return bin_path, pathlib.Path("node")
     if EXTRACTED_DSH.exists():
         return EXTRACTED_DSH, pathlib.Path("node")
     return PACKAGED_DSH, PACKAGED_ELECTRON
