@@ -62,6 +62,19 @@ $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
 
 令牌不是供应商 API Key；不要写进日志、Git 或聊天。
 
+### 运维状态
+
+`GET /api/status` 返回当前运行时的真实状态：
+
+```json
+{"simulation": true,
+ "persistence": {"idempotency": true, "ledger": true, "events": true},
+ "breakers": {"provider-a": {"state": "open", "fail_streak": 3, "window_fails": 3, "open_until": 1700000000.0}},
+ "providers": [{"name": "mock-alpha", "state": "eligible", "policy_reason": "admitted"}]}
+```
+
+`simulation` 为 false 表示配置了真实 provider（是否可调用仍由三条件闸门决定）；`breakers` 为空表示没有配置熔断器。
+
 ### 幂等请求
 
 带 `Idempotency-Key` 头的相同请求只会真正执行一次，重放返回完全相同的响应体（跨重启也有效，前提是 `--db` 指向文件）：

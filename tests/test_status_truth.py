@@ -15,13 +15,22 @@ MOCK = ProviderSpec("alpha", "mock-a", "mock_zero_cost", 1_000_000)
 REAL = ProviderSpec("zhipu", "glm-flash", "free_verified", 1_000_000, simulation=False)
 
 
-def backend_for(spec, config, port=8765):
+def backend_for(spec, config, port=8765, *, storage=None, breakers=None):
     names = frozenset({spec.name})
 
     def gate(candidate):
         return admit(candidate, config, names, 100)
 
-    services = Services(specs=(spec,), adapters={}, admit=gate, authorized=names)
+    services = Services(
+        specs=(spec,),
+        adapters={},
+        admit=gate,
+        authorized=names,
+        idempotency=getattr(storage, "idempotency", None),
+        ledger=getattr(storage, "ledger", None),
+        events=getattr(storage, "events", None),
+        breakers=breakers,
+    )
     return MemoryBackend(config=config, services=services, port=port, token=TOKEN)
 
 
@@ -53,3 +62,38 @@ def test_real_provider_is_blocked_and_reported_when_gate_closed():
     assert payload["simulation"] is False
     assert payload["providers"][0]["state"] == "blocked"
     assert payload["providers"][0]["policy_reason"] == "real_provider_not_implemented"
+
+
+
+def test_status_reports_persistence_flags():
+    from tokensfree.runtime import Storage
+
+    payload = status_of(backend_for(MOCK, CONFIG_OFF))
+    assert payload["persistence"] == {"idempotency": False, "ledger": False, "events": False}
+
+    storage = Storage.open(":memory:")
+    try:
+        payload = status_of(backend_for(MOCK, CONFIG_OFF, storage=storage))
+        assert payload["persistence"] == {"idempotency": True, "ledger": True, "events": True}
+    finally:
+        storage.close()
+
+
+def test_status_reports_breaker_state_without_leaking_secrets():
+    from tokensfree.router.health import CircuitBreaker
+
+    breaker = CircuitBreaker(threshold=1, open_s=60)
+    breaker.record_failure(1000)
+    payload = status_of(backend_for(MOCK, CONFIG_OFF, breakers={"alpha": breaker}))
+    assert payload["breakers"]["alpha"]["state"] == "open"
+    assert payload["breakers"]["alpha"]["fail_streak"] == 1
+    assert TOKEN not in json.dumps(payload)
+
+
+def test_status_breaker_snapshot_failure_is_contained():
+    class BrokenBreaker:
+        def snapshot(self):
+            raise RuntimeError("boom")
+
+    payload = status_of(backend_for(MOCK, CONFIG_OFF, breakers={"alpha": BrokenBreaker()}))
+    assert payload["breakers"]["alpha"] == {"state": "unknown"}

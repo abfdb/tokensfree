@@ -80,7 +80,26 @@ class MemoryBackend:
         # Never claim simulation when a real provider is configured: after the gate opens
         # this field must tell the truth.
         simulation = all(getattr(spec, "simulation", True) for spec in self.services.specs)
-        return {"simulation": simulation, "providers": providers}
+        persistence = {
+            "idempotency": self.services.idempotency is not None,
+            "ledger": self.services.ledger is not None,
+            "events": self.services.events is not None,
+        }
+        breakers = {}
+        for name, breaker in (getattr(self.services, "breakers", None) or {}).items():
+            snapshot = getattr(breaker, "snapshot", None)
+            if not callable(snapshot):
+                continue
+            try:
+                breakers[str(name)] = snapshot()
+            except Exception:
+                breakers[str(name)] = {"state": "unknown"}
+        return {
+            "simulation": simulation,
+            "persistence": persistence,
+            "breakers": breakers,
+            "providers": providers,
+        }
 
     async def _chat(self, request, request_id):
         try:
