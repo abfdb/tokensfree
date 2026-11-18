@@ -94,6 +94,8 @@ class OpenAICompatAdapter:
             payload["seed"] = request.seed
         if request.response_format is not None:
             payload["response_format"] = dict(request.response_format)
+        if stream and request.stream_include_usage:
+            payload["stream_options"] = {"include_usage": True}
         return json.dumps(payload).encode("utf-8")
 
     def _connect(self):

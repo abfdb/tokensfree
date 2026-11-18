@@ -15,6 +15,7 @@
 - 候选构建、准入闸门、有界重试执行（`router/candidates.py` / `admission.py` / `execute.py`）
 - 客户端模型选择：`tokensfree-auto` 由路由器决定，具体模型 id 精确匹配，未知模型返回 404 `model_not_found`
 - 客户端采样参数原样转发：`temperature` / `top_p` / `stop` / `seed` / `response_format`（此前被静默丢弃）；`n>1` 明确拒绝
+- 流式用量：`stream_options.include_usage` 会在终止帧后返回标准 usage 帧；`created` 字段改为真实时间戳
 - 账号调度（LRU / 冷却 / 并发上限）、熔断器、账号池（`router/scheduling.py` / `health.py` / `account_pool.py`）
 - 运行时默认按 provider 装配熔断器：连续失败后跳过该 provider，`/api/status` 可见，窗口结束后单探测恢复
 - SQLite 持久化：迁移、幂等键、只增账本、事件（`store/`），并接入可运行服务（`--db`，默认进程内）

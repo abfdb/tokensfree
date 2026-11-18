@@ -4,6 +4,7 @@ Turns an OpenAI-shaped chat payload into the kernel's ChatRequest, and turns
 kernel results/errors back into OpenAI-shaped bodies. No HTTP objects live here,
 so the legacy stdlib server and the future async backend share one semantic.
 """
+import time
 from dataclasses import dataclass
 
 from tokensfree.adapters.base import ChatRequest, NormalizedError
@@ -44,6 +45,7 @@ class ParsedChat:
     stream: bool
     requires_tools: bool
     capabilities: frozenset
+    include_usage: bool = False
 
 
 def _reject():
@@ -157,6 +159,17 @@ def parse_chat_payload(payload, *, developer_role_policy="map", max_messages=32,
     stream = payload.get("stream", False)
     if not isinstance(stream, bool):
         _reject()
+    include_usage = False
+    stream_options = payload.get("stream_options")
+    if stream_options is not None:
+        if not isinstance(stream_options, dict):
+            _reject()
+        raw_usage = stream_options.get("include_usage")
+        if raw_usage is not None and not isinstance(raw_usage, bool):
+            _reject()
+        if raw_usage and not stream:
+            _reject()
+        include_usage = bool(raw_usage)
     max_tokens = payload.get("max_tokens", DEFAULT_MAX_TOKENS)
     if type(max_tokens) is not int or not 1 <= max_tokens <= 1_000_000:
         _reject()
@@ -210,8 +223,15 @@ def parse_chat_payload(payload, *, developer_role_policy="map", max_messages=32,
         stop=stop,
         seed=seed,
         response_format=response_format,
+        stream_include_usage=include_usage,
     )
-    return ParsedChat(request=request, stream=stream, requires_tools=requires_tools, capabilities=frozenset(capabilities))
+    return ParsedChat(
+        request=request,
+        stream=stream,
+        requires_tools=requires_tools,
+        capabilities=frozenset(capabilities),
+        include_usage=include_usage,
+    )
 
 
 def map_upstream_error(error):
@@ -220,14 +240,14 @@ def map_upstream_error(error):
     return _UPSTREAM_TO_CLIENT.get(error.code, ErrorCode.upstream_error)
 
 
-def build_chat_response(*, request_id, model, content, usage=None, finish_reason="stop", trace=None, tool_calls=()):
+def build_chat_response(*, request_id, model, content, usage=None, finish_reason="stop", trace=None, tool_calls=(), created=None):
     message = {"role": "assistant", "content": content}
     if tool_calls:
         message["tool_calls"] = [dict(call) for call in tool_calls]
     body = {
         "id": request_id,
         "object": "chat.completion",
-        "created": 0,
+        "created": int(time.time()) if created is None else int(created),
         "model": model,
         "choices": [{"index": 0, "message": message, "finish_reason": finish_reason}],
     }

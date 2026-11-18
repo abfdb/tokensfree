@@ -80,11 +80,18 @@ async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=ti
             trace.append((spec.name, "denied:" + denied.reason))
             continue
         encoder = SseEncoder(model=spec.name, request_id=plan.request_id)
+        include_usage = bool(getattr(plan.parsed, "include_usage", False))
+        usage = None
         emitted = False
         first = True
+        finish_emitted = False
         try:
             async for event in adapter.stream(plan.parsed.request, admission):
+                if event.usage is not None:
+                    usage = event.usage
                 if event.kind == "delta":
+                    if finish_emitted:
+                        continue
                     delta = dict(event.delta or {})
                     if first:
                         if "role" not in delta:
@@ -95,6 +102,8 @@ async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=ti
                         yield encoder.chunk(delta)
                     continue
                 if event.kind == "finish":
+                    if finish_emitted:
+                        continue
                     if breaker is not None:
                         breaker.record_success(clock())
                     if first:
@@ -102,19 +111,32 @@ async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=ti
                         emitted = True
                         first = False
                     yield encoder.chunk({}, finish_reason=event.finish_reason or "stop")
-                    yield encoder.done()
-                    return
+                    finish_emitted = True
+                    if not include_usage:
+                        yield encoder.done()
+                        return
+                    continue
                 if event.kind == "done":
                     # Some upstreams end with [DONE] but no finish_reason chunk.
-                    if first:
-                        yield encoder.chunk({"role": "assistant"})
-                        emitted = True
-                        first = False
-                    if breaker is not None:
-                        breaker.record_success(clock())
-                    yield encoder.chunk({}, finish_reason="stop")
+                    if not finish_emitted:
+                        if first:
+                            yield encoder.chunk({"role": "assistant"})
+                            emitted = True
+                            first = False
+                        if breaker is not None:
+                            breaker.record_success(clock())
+                        yield encoder.chunk({}, finish_reason="stop")
+                        finish_emitted = True
+                    if include_usage and usage is not None:
+                        yield encoder.usage(usage)
                     yield encoder.done()
                     return
+            if finish_emitted:
+                # finish already reached; a missing [DONE] is tolerated once usage is delivered.
+                if include_usage and usage is not None:
+                    yield encoder.usage(usage)
+                yield encoder.done()
+                return
         except NormalizedError as error:
             if breaker is not None:
                 breaker.record_failure(clock())

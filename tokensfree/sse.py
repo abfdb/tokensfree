@@ -5,6 +5,7 @@ The encoder refuses any chunk after a terminal frame, so a finished stream
 cannot be silently extended by another provider.
 """
 import json
+import time
 
 DONE = b"data: [DONE]\n\n"
 
@@ -22,6 +23,7 @@ class SseEncoder:
         self.model = model
         self.request_id = request_id
         self.include_usage = include_usage
+        self._created = int(time.time())
         self._finished = False
 
     def chunk(self, delta, finish_reason=None, usage=None):
@@ -32,7 +34,7 @@ class SseEncoder:
         payload = {
             "id": self.request_id,
             "object": "chat.completion.chunk",
-            "created": 0,
+            "created": self._created,
             "model": self.model,
             "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
         }
@@ -40,6 +42,20 @@ class SseEncoder:
             payload["usage"] = usage
         if finish_reason is not None:
             self._finished = True
+        return _frame(payload)
+
+    def usage(self, usage):
+        """OpenAI-style final usage frame: empty choices, usage only, after finish."""
+        if not self._finished or getattr(self, "_errored", False):
+            raise RuntimeError("usage frame must follow the finish frame")
+        payload = {
+            "id": self.request_id,
+            "object": "chat.completion.chunk",
+            "created": self._created,
+            "model": self.model,
+            "choices": [],
+            "usage": usage,
+        }
         return _frame(payload)
 
     def error(self, code, request_id=None):

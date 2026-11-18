@@ -25,6 +25,7 @@ class ChatRequest:
     stop: tuple = ()
     seed: int | None = None
     response_format: dict | None = None
+    stream_include_usage: bool = False
 
 
 @dataclass(frozen=True)

@@ -112,6 +112,8 @@ class LoopbackStreamingAdapter:
             payload["seed"] = request.seed
         if request.response_format is not None:
             payload["response_format"] = dict(request.response_format)
+        if request.stream_include_usage:
+            payload["stream_options"] = {"include_usage": True}
         body = json.dumps(payload).encode("utf-8")
         iterator = self.transport.iter_lines(body)
         sentinel = object()

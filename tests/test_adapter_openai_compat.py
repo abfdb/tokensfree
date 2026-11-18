@@ -227,3 +227,12 @@ def test_sampling_parameters_are_forwarded(json_upstream):
     assert sent["stop"] == ["END"]
     assert sent["seed"] == 7
     assert sent["response_format"] == {"type": "json_object"}
+
+
+
+def test_stream_include_usage_is_forwarded(json_upstream):
+    adapter = OpenAICompatAdapter(base_url(json_upstream), KEY)
+    streaming = request(stream=True, stream_include_usage=True)
+    sent = json.loads(adapter._body(streaming, stream=True).decode("utf-8"))
+    assert sent["stream"] is True
+    assert sent["stream_options"] == {"include_usage": True}

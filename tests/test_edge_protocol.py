@@ -256,3 +256,23 @@ def test_n_greater_than_one_is_unsupported():
 
 def base_model():
     return "tokensfree-auto"
+
+
+
+def test_stream_options_include_usage_is_parsed():
+    parsed = parse_chat_payload(payload(stream=True, stream_options={"include_usage": True}))
+    assert parsed.include_usage is True
+    assert parsed.request.stream_include_usage is True
+
+
+def test_stream_options_without_usage_keeps_it_off():
+    parsed = parse_chat_payload(payload(stream=True, stream_options={"include_usage": False}))
+    assert parsed.include_usage is False
+    assert parsed.request.stream_include_usage is False
+
+
+def test_chat_response_created_is_a_real_timestamp():
+    from tokensfree.edge.protocol import build_chat_response
+
+    body = build_chat_response(request_id="req-1", model="m", content="hi")
+    assert isinstance(body["created"], int) and body["created"] > 0
