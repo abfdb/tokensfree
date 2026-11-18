@@ -93,6 +93,13 @@ def test_no_retry_after_first_byte():
         run(candidates, first_byte_sent=lambda: True)
 
 
+def test_retryable_error_surfaces_when_candidates_are_exhausted():
+    candidates = [Candidate(spec("alpha"), FakeAdapter([NormalizedError("rate_limited", retryable=True)]))]
+    with pytest.raises(NormalizedError) as caught:
+        run(candidates)
+    assert caught.value.code == "rate_limited"
+
+
 def test_no_candidates_raises():
     with pytest.raises(NoProviderAvailable) as caught:
         run([])

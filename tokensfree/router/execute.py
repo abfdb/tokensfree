@@ -38,6 +38,7 @@ async def execute(candidates, *, admit, request, max_attempts=2, first_byte_sent
     if type(max_attempts) is not int or max_attempts < 1:
         raise ValueError("max_attempts must be a positive int")
     trace = []
+    last_error = None
     for candidate in candidates:
         if len(trace) >= max_attempts:
             break
@@ -50,10 +51,13 @@ async def execute(candidates, *, admit, request, max_attempts=2, first_byte_sent
             result = await candidate.adapter.complete(request, admission)
         except NormalizedError as error:
             trace.append((candidate.spec.name, error.code))
+            last_error = error
             streaming_started = first_byte_sent is not None and first_byte_sent()
             if not error.retryable or streaming_started or len(trace) >= max_attempts:
                 raise
             continue
         trace.append((candidate.spec.name, "success"))
         return Execution(result=result, provider=candidate.spec.name, attempts=tuple(trace))
+    if last_error is not None:
+        raise last_error
     raise NoProviderAvailable(trace)
