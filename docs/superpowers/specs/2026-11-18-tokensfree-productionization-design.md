@@ -302,7 +302,8 @@ DSH 的自定义 provider 走 `dsh-llm-pi-ai` 的 hand-declared route。实测�
 4. **`execute()` 语义修正**：候选耗尽时抛出**最后一个可重试错误**，而不是退化成 `no_free_provider`，避免丢失 429/Retry-After 语义。
 5. **错误码表追加 5 个上游码**（`upstream_auth_failed` / `upstream_rate_limited` / `upstream_error` / `upstream_timeout` / `upstream_disconnected`）：只增不改，旧客户端不受影响。
 6. **上游传输用 stdlib `http.client`**（而非计划中的 aiohttp/httpx）：传输层与 D1（服务端框架）解耦，等 D1 确定后再决定是否替换。
-7. **开发依赖装进仓库内 `.venv`**：本机子进程 `HOME` 为空导致 pip 用户目录落成仓库内的字面 `~` 目录，已回退误提交、删除并加入 `.gitignore`。
+7. **旧 HTTP 处理层改为复用 `tokensfree.edge.auth`**：Host/Origin/令牌校验不再有两份实现。随之修正一处行为：Bearer 方案名按 RFC 7235 大小写不敏感（旧实现只接受精确的 `Bearer `），并有 `tests/test_legacy_edge_parity.py` 逐组合对照新旧规则。
+8. **开发依赖装进仓库内 `.venv`**：本机子进程 `HOME` 为空导致 pip 用户目录落成仓库内的字面 `~` 目录，已回退误提交、删除并加入 `.gitignore`。
 
 ### 未完成的验收
 

@@ -5,6 +5,7 @@ from pathlib import Path
 from providers import ProviderSpec, MockAdapter, evaluate
 from tokensfree.errors import ErrorCode, http_error
 from tokensfree import obs
+from tokensfree.edge.auth import bearer_token, origin_allowed, token_matches
 from agent_fixture import Roundtrip, SENTINEL, sse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -149,8 +150,7 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, TimeoutError):
             self.close_connection = True
     def allowed(self):
-        hosts = {f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}'}
-        return self.headers.get('Host') in hosts and (not self.headers.get('Origin') or self.headers['Origin'] in {'http://'+x for x in hosts})
+        return origin_allowed(self.headers.get('Host'), self.headers.get('Origin'), self.server.server_port)
     def do_GET(self):
         rid = 'req-' + uuid.uuid4().hex
         if not self.allowed(): return self.send(*http_error(ErrorCode.origin_rejected, rid))
@@ -171,8 +171,8 @@ class Handler(BaseHTTPRequestHandler):
         self._rid = rid
         obs.log_event('request.start', request_id=rid)
         if not self.allowed(): return self.send(*http_error(ErrorCode.origin_rejected, rid))
-        token = self.headers.get('Authorization','').encode('utf-8')
-        if not secrets.compare_digest(token,('Bearer '+self.server.token).encode('utf-8')): return self.send(*http_error(ErrorCode.unauthorized, rid))
+        provided = bearer_token(self.headers.get('Authorization'))
+        if not token_matches(self.server.token, provided): return self.send(*http_error(ErrorCode.unauthorized, rid))
         try:
             if self.headers.get('Transfer-Encoding') is not None or len(self.headers.get_all('Content-Length',[])) != 1:
                 raise ValueError('ambiguous framing')
