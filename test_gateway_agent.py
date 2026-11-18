@@ -4,6 +4,16 @@ from pathlib import Path
 from server import make_server
 from agent_fixture import CALL_ID,SENTINEL,expected_read_result
 
+def sse_json_frames(body):
+    """Parse SSE data: frames into dicts; skip the [DONE] sentinel."""
+    frames=[]
+    for line in body.decode('utf-8').splitlines():
+        if not line.startswith('data: '):continue
+        payload=line[len('data: '):].strip()
+        if payload=='[DONE]':continue
+        frames.append(json.loads(payload))
+    return frames
+
 def start():
     return {'model':'tokensfree-fixture','stream':True,'messages':[{'role':'user','content':'fixture'}],
             'tools':[{'type':'function','function':{'name':'read'}}]}
@@ -66,7 +76,9 @@ class GatewayAgentTests(unittest.TestCase):
         status,_,body=self.request(payload)
         if status==200:
             self.assertNotIn(b'/etc/passwd',body)
-            self.assertIn(str(self.srv.fixture_path).encode(),body)
+            frames=sse_json_frames(body)
+            arguments=frames[1]['choices'][0]['delta']['tool_calls'][0]['function']['arguments']
+            self.assertEqual(json.loads(arguments)['file_path'],str(self.srv.fixture_path))
         else:self.assertEqual(status,400)
 
 
