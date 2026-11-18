@@ -190,6 +190,15 @@ def parse_chat_payload(payload, *, developer_role_policy="map", max_messages=32,
         tools = ()
     if "n" in payload and not (type(payload["n"]) is int and payload["n"] == 1):
         raise RequestRejected(ErrorCode.unsupported_capability)
+    # Silent omission is worse than a clear rejection: these cannot be delivered.
+    if payload.get("logprobs") is not None and not isinstance(payload.get("logprobs"), bool):
+        _reject()
+    if payload.get("logprobs") is True or payload.get("top_logprobs") is not None:
+        raise RequestRejected(ErrorCode.unsupported_capability)
+    if payload.get("modalities") is not None and payload.get("modalities") != ["text"]:
+        raise RequestRejected(ErrorCode.unsupported_capability)
+    if payload.get("audio") is not None:
+        raise RequestRejected(ErrorCode.unsupported_capability)
     temperature = _optional_number(payload, "temperature", 0.0, 2.0)
     top_p = _optional_number(payload, "top_p", 0.0, 1.0)
     presence_penalty = _optional_number(payload, "presence_penalty", -2.0, 2.0)

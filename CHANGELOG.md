@@ -17,6 +17,7 @@
 - 客户端采样参数原样转发：`temperature` / `top_p` / `stop` / `seed` / `response_format`（此前被静默丢弃）；`n>1` 明确拒绝
 - 流式用量：`stream_options.include_usage` 会在终止帧后返回标准 usage 帧；`created` 字段改为真实时间戳
 - `max_completion_tokens` 别名与 `presence_penalty`/`frequency_penalty` 透传（避免新 SDK 的 token 上限被静默忽略）
+- 无法交付的能力（`n>1`、logprobs、非文本 modalities、audio）明确返回 `unsupported_capability` 而不是静默忽略
 - 账号调度（LRU / 冷却 / 并发上限）、熔断器、账号池（`router/scheduling.py` / `health.py` / `account_pool.py`）
 - 运行时默认按 provider 装配熔断器：连续失败后跳过该 provider，`/api/status` 可见，窗口结束后单探测恢复
 - SQLite 持久化：迁移、幂等键、只增账本、事件（`store/`），并接入可运行服务（`--db`，默认进程内）

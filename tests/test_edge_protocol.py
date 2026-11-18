@@ -308,3 +308,34 @@ def test_penalties_are_kept_and_validated():
     for overrides in ({"presence_penalty": -3}, {"frequency_penalty": 2.5}, {"presence_penalty": "x"}):
         with pytest.raises(RequestRejected):
             parse_chat_payload(payload(**overrides))
+
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"logprobs": True},
+        {"top_logprobs": 3},
+        {"modalities": ["text", "audio"]},
+        {"audio": {"format": "wav"}},
+    ],
+)
+def test_features_we_cannot_honor_are_rejected_as_unsupported(overrides):
+    from tokensfree.edge.protocol import RequestRejected
+
+    with pytest.raises(RequestRejected) as caught:
+        parse_chat_payload(payload(**overrides))
+    assert caught.value.code.value == "unsupported_capability"
+
+
+def test_malformed_logprobs_is_invalid_request():
+    from tokensfree.edge.protocol import RequestRejected
+
+    with pytest.raises(RequestRejected) as caught:
+        parse_chat_payload(payload(logprobs="yes"))
+    assert caught.value.code.value == "invalid_request"
+
+
+def test_default_text_modalities_and_false_logprobs_are_accepted():
+    parsed = parse_chat_payload(payload(logprobs=False, modalities=["text"]))
+    assert parsed.request.model == "tokensfree-auto"
