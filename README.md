@@ -68,14 +68,28 @@ print(json.load(urllib.request.urlopen(req)))
 | `runtime.py` | 把配置与适配器装配成可运行的服务依赖 |
 | `store/` | SQLite 迁移、幂等键、只增账本、脱敏事件（已接入请求链路） |
 
-> 新内核的验证：`python -m pytest -q` 共 246 项（含 5 个端到端用例：真实本地 HTTP 假上游 → 传输 → 解析 → 流式核心 → 客户端帧）。
+### 新后端（可运行，mock 运行时）
+
+新内核已经是一个**可启动的服务**，与旧 `server.py` 并存：
+
+```sh
+# Windows PowerShell
+$env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
+.venv\Scripts\python -m tokensfree.edge.host --port 8766
+```
+
+端点：`GET /v1/models`、`POST /v1/chat/completions`（非流式）。Host/Origin/令牌校验与旧实现共用同一套函数。
+mock 运行时没有流式适配器，因此 `stream:true` 会得到明确的 `400 unsupported_capability`（不静默降级）。
+一旦 D1 选定服务器框架，同一个 ASGI app 可以换由 uvicorn/hypercorn 托管；aiohttp 后端也只是另一个 `Backend` 实现。
+
+> 新内核的验证：`python -m pytest -q` 共 287 项（含 5 个端到端用例：真实本地 HTTP 假上游 → 传输 → 解析 → 流式核心 → 客户端帧）。
 
 ## 验证
 
 ```sh
 python -m pip install -r requirements-dev.txt
 python -m ruff check .
-python -m pytest -q          # 246 项，Windows/macOS/Linux 三平台一致
+python -m pytest -q          # 287 项，Windows/macOS/Linux 三平台一致
 python check_dsh_contract.py # 8 项契约矩阵，退出 0 表示拒绝行为符合预期
 ```
 
