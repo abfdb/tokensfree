@@ -212,6 +212,7 @@ class AsgiHost:
 
 def main():
     import argparse
+    import os
 
     from tokensfree.config import load_config
     from tokensfree.edge.asgi import make_asgi_app
@@ -221,7 +222,7 @@ def main():
     parser = argparse.ArgumentParser(description="Serve the tokensfree ASGI app on loopback")
     parser.add_argument("--port", type=int, default=8766)
     args = parser.parse_args()
-    config = load_config({})
+    config = load_config(os.environ)
     if config.local_token is None:
         raise SystemExit("TOKENSFREE_LOCAL_TOKEN must be set for the new backend")
     runtime = build_mock_runtime(config=config)
