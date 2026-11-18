@@ -91,8 +91,13 @@ class Gateway:
                 event = {'time': time.strftime('%H:%M:%S'), 'request_id': request_id, 'provider': name, 'result': result}
                 self.events.append(event); self.events = self.events[-100:]; trace.append(event)
                 if result == 'success':
+                    content = f'[模拟响应] {name} 已接收文本请求。未调用真实 AI；切换流程已执行。'
+                    prompt_tokens = len(json.dumps(messages, ensure_ascii=False, sort_keys=True)) // 4
+                    completion_tokens = len(content) // 4
                     return 200, {'id': request_id, 'object':'chat.completion', 'created':int(time.time()), 'model':name,
-                        'choices':[{'index':0,'message':{'role':'assistant','content':f'[模拟响应] {name} 已接收文本请求。未调用真实 AI；切换流程已执行。'},'finish_reason':'stop'}],
+                        'choices':[{'index':0,'message':{'role':'assistant','content':content},'finish_reason':'stop'}],
+                        'usage':{'prompt_tokens':prompt_tokens, 'completion_tokens':completion_tokens,
+                                 'total_tokens':prompt_tokens+completion_tokens, 'estimated':True},
                         'tokensfree':{'simulation':True,'trace':trace,'billing':'no external calls'}}
                 if result in ('exhausted','auth'): self.cooldowns[name] = float('inf')
                 if result == 'limited': self.cooldowns[name] = time.time()+30
