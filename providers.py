@@ -41,13 +41,24 @@ class MockAdapter:
 
 
 def evaluate(spec: ProviderSpec, authorized: frozenset, now: float,
-             required: frozenset = frozenset({'text'})) -> Decision:
+             required: frozenset = frozenset({'text'}), *, allow_real: bool = False) -> Decision:
+    """Fail-closed policy. Real providers need allow_real plus explicit free evidence.
+
+    The default (allow_real=False) keeps the legacy guarantee: a real provider can
+    never reach an adapter, whatever anyone believes about its billing.
+    """
     if not math.isfinite(now): return Decision(False, 'invalid_clock')
     if not spec.enabled: return Decision(False, 'disabled')
     if spec.name not in authorized: return Decision(False, 'not_authorized')
     if not required.issubset(spec.capabilities): return Decision(False, 'capability_mismatch')
-    # Hard block: this release cannot turn a config flag into real network access.
-    if not spec.simulation: return Decision(False, 'real_provider_not_implemented')
+    if not spec.simulation:
+        # Real providers: the switch alone is never enough; evidence must be explicit
+        # and unexpired, and authorization already passed above.
+        if not allow_real: return Decision(False, 'real_provider_not_implemented')
+        if spec.cost_evidence != 'free_verified': return Decision(False, 'unverified_free_status')
+        if not math.isfinite(spec.evidence_expires_at) or spec.evidence_expires_at <= now:
+            return Decision(False, 'expired_free_evidence')
+        return Decision(True, 'verified_real')
     if spec.cost_evidence != 'mock_zero_cost': return Decision(False, 'unverified_free_status')
     if not math.isfinite(spec.evidence_expires_at) or spec.evidence_expires_at <= now:
         return Decision(False, 'expired_free_evidence')

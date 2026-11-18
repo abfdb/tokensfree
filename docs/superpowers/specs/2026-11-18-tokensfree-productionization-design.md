@@ -350,3 +350,16 @@ G1（DSH 工具往返）、G2（默认零外发的 HTTP 侧证明）、G5 的 ke
 | 26 | 账号池：调度 + 仓储 + 账本合体 |
 
 审计结论：内核对外的三个入口（旧 mock server、新 host、ASGI app）均可运行；无 TODO/FIXME 残留；未发现无引用模块（`adapters.mock`、`obs`、`account_pool` 为间接/待接线引用）。真实供应商与 keyring 仍是唯一阻塞项（D2）。
+
+
+## 附录 G：真实调用闸门（2026-11-18，32 轮）
+
+`providers.evaluate()` 增加 `allow_real` 关键字（默认 `False`，保持旧行为不变）。`router.admission.admit()` 以 `config.enable_real` 传入，因此真实 provider 只有在**同时满足**以下条件时才会拿到 `Admission`：
+
+1. `TOKENSFREE_ENABLE_REAL=1`（`allow_real`）；
+2. provider 在服务器授权名单中；
+3. `cost_evidence == "free_verified"` 且 `evidence_expires_at` 未过期。
+
+任何一条不满足都在准入处拒绝，适配器不会被调用（端到端测试断言适配器调用数为 0）。旧 `evaluate()` 默认路径仍对所有真实 provider 返回 `real_provider_not_implemented`，旧 mock 实现行为完全不变。
+
+这意味着 D2 之后只剩"提供 key + 写 evidence + 打开开关"三步，不需要再改策略代码。

@@ -21,7 +21,7 @@ class AdmissionDenied(Exception):
 def admit(spec, config, authorized, now, required=frozenset({"text"})):
     if not isinstance(authorized, (set, frozenset)):
         raise TypeError("authorized must be a set")
-    decision = evaluate(spec, authorized, now, required)
+    decision = evaluate(spec, authorized, now, required, allow_real=config.enable_real)
     if not decision.allowed:
         raise AdmissionDenied(decision.reason)
     if spec.simulation is False and config.enable_real is False:

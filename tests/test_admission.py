@@ -41,7 +41,7 @@ def test_real_provider_still_denied_with_switch_on():
     config = load_config({"TOKENSFREE_ENABLE_REAL": "1"})
     with pytest.raises(AdmissionDenied) as caught:
         admit(replace(SPEC, simulation=False), config, frozenset({"alpha"}), 100)
-    assert caught.value.reason == "real_provider_not_implemented"
+    assert caught.value.reason == "unverified_free_status"
 
 
 def test_admission_denied_message_is_the_reason():
