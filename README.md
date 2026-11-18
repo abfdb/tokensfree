@@ -107,8 +107,8 @@ mock 运行时没有流式适配器，因此 `stream:true` 会得到明确的 `4
 ```sh
 python -m pip install -r requirements-dev.txt
 python -m ruff check .
-python -m pytest -q          # 329 项，Windows/macOS/Linux 三平台一致
-python check_dsh_contract.py # 329 项契约矩阵，退出 0 表示拒绝行为符合预期
+python -m pytest -q          # 379 passed / 1 skipped（skip 为 opt-in 真实 DSH 用例）
+python check_dsh_contract.py # 8 组拒绝行为矩阵，退出 0 表示符合预期
 ```
 
 推荐在虚拟环境中安装开发依赖：`python -m venv .venv`，再 `.venv\Scripts\pip install -r requirements-dev.txt`（macOS/Linux 用 `.venv/bin/pip`）。之后的命令用 `.venv\Scripts\python` 代替 `python`。
@@ -120,16 +120,25 @@ python check_dsh_contract.py # 329 项契约矩阵，退出 0 表示拒绝行为
 | 阶段 | 状态 |
 |---|---|
 | P0 工程基线：CI（三平台 × 3 个 Python 版本）、统一错误契约、结构化日志、契约矩阵可注入 | ✅ 完成 |
-| P1 内核：配置 / 适配器契约 / 候选 / 准入闸门 / loopback 适配器 / OpenAI 兼容适配器（默认禁用） | ✅ 完成（真实调用等 D2） |
-| P2 协议：SSE 编码与解析 / 工具增量装配 / 流式核心 / 上游传输 | ✅ 完成（HTTP 服务端边缘等 D1） |
+| P1 内核：配置 / 适配器契约 / 候选 / 准入闸门 / loopback 适配器 / OpenAI 兼容适配器（默认禁用） | ✅ 完成 |
+| P1 6–7：HTTP 边缘（ASGI + stdlib host）+ 双实现契约对照 | ✅ 完成（框架选型等 D1，不影响运行） |
+| P2 协议：SSE 编码与解析 / 工具增量装配 / 流式核心 / 上游传输 | ✅ 完成 |
+| P2 真实 DSH headless 端到端（合成上游，工具往返） | ✅ 已验证 |
 | P3 持久化：迁移 / 幂等 / 只增账本 / 事件（已接入请求链路） | ✅ 完成 |
-| P1 6–7：HTTP 边缘 + 双实现契约对照 | ⛔ 等 D1 |
-| 真实供应商 / 凭证库 / DSH 冒烟 | ⛔ 等 D2 与边缘层 |
+| P4 真实调用闸门（开关 + 授权 + 免费证据三条件） | ✅ 默认关闭，等 D2 开启 |
+| 真实供应商 / 系统凭证库 / 真实模型联调 | ⛔ 等 D2 |
 
-设计见 [docs/superpowers/specs/](docs/superpowers/specs/)，计划见 [docs/superpowers/plans/](docs/superpowers/plans/)（P0、P1、P2）。JS 通过 `node --check static/app.js`。旧 `server.py` 仍是 mock-only 实现；新内核尚未接入 HTTP。
+**当前验证状态（2026-11-18）**
+
+- `scripts/verify_p0.py` → P0 OK（ruff / pytest / 契约矩阵 / 导入出口门禁 / 密钥扫描）
+- 干净克隆 → venv → 安装依赖 → `verify_p0.py` → P0 OK（可复现）
+- 真实 DSH 0.2.2-rc.1 headless + 合成上游：流式、23 个工具透传、`read` 工具往返、最终文本、退出码 0 全部通过（`scripts/dsh_smoke.py`）
+- P0–P3 内核与审计修复共 379 项测试通过（1 项 opt-in DSH 用例默认跳过）
+
+设计见 [docs/superpowers/specs/](docs/superpowers/specs/)，计划见 [docs/superpowers/plans/](docs/superpowers/plans/)（P0、P1、P2）。JS 通过 `node --check static/app.js`。旧 `server.py` 是冻结的 mock 参考实现；新内核通过 `tokensfree.edge.host` 或任意 ASGI 服务器提供 HTTP 服务，两者用契约测试对照。
 
 ## 项目结构
-`server.py` 路由与本地服务；`test_gateway.py` 自动测试；`static/` 极客控制台；`static/catalog/` 资源目录。运行状态不会写入源码。`package.json` 仅供开发预览，无 npm 依赖。
+`server.py` 冻结的 mock 参考服务；`tokensfree/` 新内核（配置 / 适配器 / 路由 / 持久化 / 边缘）；`scripts/` 验收与 DSH 冒烟；`test_gateway.py` 旧实现自动测试；`static/` 极客控制台；`static/catalog/` 资源目录。运行状态不会写入源码。`package.json` 仅供开发预览，无 npm 依赖。
 
 许可证：Apache-2.0（见仓库根目录 `LICENSE`）。本项目为本地原型，仍不应声称已具备生产可用性。
 
