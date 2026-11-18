@@ -199,6 +199,10 @@ def parse_chat_payload(payload, *, developer_role_policy="map", max_messages=32,
         raise RequestRejected(ErrorCode.unsupported_capability)
     if payload.get("audio") is not None:
         raise RequestRejected(ErrorCode.unsupported_capability)
+    # logit_bias changes the sampling distribution; silently dropping it would
+    # change what the client gets back, so refuse instead.
+    if payload.get("logit_bias") not in (None, {}):
+        raise RequestRejected(ErrorCode.unsupported_capability)
     temperature = _optional_number(payload, "temperature", 0.0, 2.0)
     top_p = _optional_number(payload, "top_p", 0.0, 1.0)
     presence_penalty = _optional_number(payload, "presence_penalty", -2.0, 2.0)

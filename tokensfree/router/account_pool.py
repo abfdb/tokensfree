@@ -5,6 +5,10 @@ It composes the pure scheduler with the SQLite repositories:
 - a pick touches last_used_at and, when a request id is given, writes one
   ledger row so usage stays auditable;
 - only a platform signal may exhaust an account.
+
+Runtime note: the runtime currently models each real key as its own provider
+spec and rotates candidate order with `scheduling.RoundRobin`; this module is
+kept for a future "one provider, many accounts" scheduler.
 """
 import time
 

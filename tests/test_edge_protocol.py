@@ -339,3 +339,17 @@ def test_malformed_logprobs_is_invalid_request():
 def test_default_text_modalities_and_false_logprobs_are_accepted():
     parsed = parse_chat_payload(payload(logprobs=False, modalities=["text"]))
     assert parsed.request.model == "tokensfree-auto"
+
+
+
+def test_logit_bias_is_rejected():
+    from tokensfree.edge.protocol import RequestRejected
+
+    with pytest.raises(RequestRejected) as caught:
+        parse_chat_payload(payload(logit_bias={"50256": -100}))
+    assert caught.value.code.value == "unsupported_capability"
+
+
+def test_empty_logit_bias_is_accepted():
+    parsed = parse_chat_payload(payload(logit_bias={}))
+    assert parsed.request.model == "tokensfree-auto"
