@@ -1,8 +1,11 @@
 """Application core: one chat request, no HTTP objects.
 
-Composes parse -> candidates -> admission -> execute -> response. A backend only
-moves bytes; every policy decision stays in this module and the kernel.
+Composes parse -> idempotency -> candidates -> admission -> execute -> persist.
+A backend only moves bytes; every policy and bookkeeping decision stays here.
 """
+import hashlib
+import json
+import time
 from dataclasses import dataclass
 
 from tokensfree.adapters.base import NormalizedError
@@ -24,6 +27,9 @@ class Services:
     adapters: dict
     admit: object
     authorized: frozenset
+    idempotency: object = None
+    ledger: object = None
+    events: object = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +52,17 @@ def _estimate_usage(messages, content):
     }
 
 
+def _fingerprint(payload):
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _error_code(body):
+    if isinstance(body, dict) and isinstance(body.get("error"), dict):
+        return body["error"].get("code")
+    return None
+
+
 def _failed(code, request_id, *, provider=None, attempts=None):
     status, body = build_error(code, request_id)
     if attempts is not None:
@@ -53,7 +70,7 @@ def _failed(code, request_id, *, provider=None, attempts=None):
     return ChatOutcome(status=status, body=body, request_id=request_id, provider=provider)
 
 
-async def handle_chat(payload, *, services, request_id, developer_role_policy="map"):
+async def _execute(payload, *, services, request_id, developer_role_policy):
     try:
         parsed = parse_chat_payload(payload, developer_role_policy=developer_role_policy)
     except RequestRejected as rejected:
@@ -89,3 +106,68 @@ async def handle_chat(payload, *, services, request_id, developer_role_policy="m
         trace=execution.attempts,
     )
     return ChatOutcome(status=200, body=body, request_id=request_id, provider=execution.provider)
+
+
+def _record(services, outcome, *, request_id, account_id, started):
+    detail = json.dumps({"status": outcome.status, "error": _error_code(outcome.body)}, ensure_ascii=False)
+    if services.ledger is not None and account_id is not None:
+        services.ledger.append(
+            account_id,
+            outcome.provider or "unknown",
+            request_id,
+            "request_attempt" if outcome.status == 200 else "request_failed",
+            -1.0,
+            "request",
+            "estimated",
+            detail=detail,
+            now=started,
+        )
+    if services.events is not None:
+        services.events.append(
+            request_id,
+            outcome="success" if outcome.status == 200 else "error",
+            provider=outcome.provider,
+            account_id=account_id,
+            latency_ms=int((time.time() - started) * 1000),
+            detail=detail,
+            at=started,
+        )
+
+
+async def handle_chat(payload, *, services, request_id, developer_role_policy="map", idempotency_key=None, account_id=None):
+    started = time.time()
+    repository = services.idempotency
+    reserved = False
+    if repository is not None and idempotency_key is not None:
+        reservation = repository.reserve(idempotency_key, _fingerprint(payload), now=started)
+        if reservation.status == "conflict":
+            return _failed(ErrorCode.idempotency_conflict, request_id)
+        if reservation.status == "capacity":
+            return _failed(ErrorCode.idempotency_capacity, request_id)
+        if reservation.status == "in_flight":
+            return _failed(ErrorCode.idempotency_conflict, request_id)
+        if reservation.status == "replay":
+            stored = json.loads(reservation.response_json or "{}")
+            return ChatOutcome(
+                status=int(stored.get("status", 200)),
+                body=stored.get("body", {}),
+                request_id=request_id,
+            )
+        reserved = True
+
+    try:
+        outcome = await _execute(
+            payload, services=services, request_id=request_id, developer_role_policy=developer_role_policy
+        )
+    except BaseException:
+        if reserved:
+            repository.cancel(idempotency_key)
+        raise
+
+    if reserved:
+        repository.complete(
+            idempotency_key,
+            json.dumps({"status": outcome.status, "body": outcome.body}, ensure_ascii=False),
+        )
+    _record(services, outcome, request_id=request_id, account_id=account_id, started=started)
+    return outcome
