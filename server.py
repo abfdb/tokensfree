@@ -16,11 +16,12 @@ SCENARIOS = {'fallback': ['exhausted', 'success'], 'success': ['success', 'succe
              'expired_evidence': ['success', 'success']}
 
 class Gateway:
-    def __init__(self, authorized_providers=None):
+    def __init__(self, authorized_providers=None, *, adapter_factory=None):
         # Trusted constructor configuration, not client-supplied authorization.
         self.authorized_providers = frozenset(('mock-alpha', 'mock-beta') if authorized_providers is None else authorized_providers)
         if not self.authorized_providers.issubset({'mock-alpha', 'mock-beta'}):
             raise ValueError('unknown server provider')
+        self.adapter_factory = adapter_factory
         self.lock = threading.RLock()
         self.cache = OrderedDict()
         self.fingerprint_secret = secrets.token_bytes(32)
@@ -88,7 +89,8 @@ class Gateway:
                 elif self.cooldowns.get(name, 0) > time.time():
                     result = 'cooldown'
                 else:
-                    result = MockAdapter(result).complete(messages).value
+                    factory = MockAdapter if self.adapter_factory is None else self.adapter_factory
+                    result = factory(result).complete(messages).value
                 event = {'time': time.strftime('%H:%M:%S'), 'request_id': request_id, 'provider': name, 'result': result}
                 self.events.append(event); self.events = self.events[-100:]; trace.append(event)
                 if result == 'success':
@@ -204,10 +206,10 @@ class LocalServer(ThreadingHTTPServer):
                 self.fixture_directory.cleanup()
                 self.fixture_directory = None
 
-def make_server(port=8765, *, enable_agent_fixture=False):
+def make_server(port=8765, *, enable_agent_fixture=False, adapter_factory=None):
     if type(enable_agent_fixture) is not bool: raise ValueError('invalid fixture flag')
     srv=LocalServer(('127.0.0.1',port),Handler)
-    srv.gateway=Gateway(); srv.token=secrets.token_urlsafe(32)
+    srv.gateway=Gateway(adapter_factory=adapter_factory); srv.token=secrets.token_urlsafe(32)
     if enable_agent_fixture:
         try:
             srv.fixture_directory=tempfile.TemporaryDirectory(prefix='tokensfree-public-fixture-')
