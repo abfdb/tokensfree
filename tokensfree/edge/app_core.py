@@ -124,6 +124,7 @@ async def _execute(payload, *, services, request_id, developer_role_policy):
         finish_reason=getattr(execution.result, "finish_reason", None) or "stop",
         usage=usage,
         trace=execution.attempts,
+        tool_calls=getattr(execution.result, "tool_calls", ()),
     )
     return ChatOutcome(status=200, body=body, request_id=request_id, provider=execution.provider)
 

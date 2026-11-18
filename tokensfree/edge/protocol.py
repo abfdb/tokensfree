@@ -163,15 +163,16 @@ def map_upstream_error(error):
     return _UPSTREAM_TO_CLIENT.get(error.code, ErrorCode.upstream_error)
 
 
-def build_chat_response(*, request_id, model, content, usage=None, finish_reason="stop", trace=None):
+def build_chat_response(*, request_id, model, content, usage=None, finish_reason="stop", trace=None, tool_calls=()):
+    message = {"role": "assistant", "content": content}
+    if tool_calls:
+        message["tool_calls"] = [dict(call) for call in tool_calls]
     body = {
         "id": request_id,
         "object": "chat.completion",
         "created": 0,
         "model": model,
-        "choices": [
-            {"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": finish_reason}
-        ],
+        "choices": [{"index": 0, "message": message, "finish_reason": finish_reason}],
     }
     if usage is not None:
         body["usage"] = usage

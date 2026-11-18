@@ -156,13 +156,40 @@ class OpenAICompatAdapter:
             if not isinstance(choices, list) or not choices:
                 raise NormalizedError("invalid_response", retryable=False, provider=self.name)
             message = choices[0].get("message") if isinstance(choices[0], dict) else None
-            content = message.get("content") if isinstance(message, dict) else None
+            if not isinstance(message, dict):
+                raise NormalizedError("invalid_response", retryable=False, provider=self.name)
+            content = message.get("content")
             if content is None:
                 content = ""
             if not isinstance(content, str):
                 raise NormalizedError("invalid_response", retryable=False, provider=self.name)
+            raw_calls = message.get("tool_calls")
+            normalized_calls = ()
+            if raw_calls is not None:
+                if not isinstance(raw_calls, list):
+                    raise NormalizedError("invalid_response", retryable=False, provider=self.name)
+                calls = []
+                for call in raw_calls:
+                    if not isinstance(call, dict):
+                        raise NormalizedError("invalid_response", retryable=False, provider=self.name)
+                    call_id = call.get("id")
+                    function = call.get("function")
+                    if not isinstance(call_id, str) or not call_id or not isinstance(function, dict):
+                        raise NormalizedError("invalid_response", retryable=False, provider=self.name)
+                    name = function.get("name")
+                    arguments = function.get("arguments", "")
+                    if not isinstance(name, str) or not name or not isinstance(arguments, str):
+                        raise NormalizedError("invalid_response", retryable=False, provider=self.name)
+                    calls.append({"id": call_id, "type": "function", "function": {"name": name, "arguments": arguments}})
+                normalized_calls = tuple(calls)
             usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
-            return ChatResult(content=content, finish_reason=choices[0].get("finish_reason") or "stop", usage=usage)
+            finish_reason = choices[0].get("finish_reason") or ("tool_calls" if normalized_calls else "stop")
+            return ChatResult(
+                content=content,
+                finish_reason=finish_reason,
+                usage=usage,
+                tool_calls=normalized_calls,
+            )
         except (OSError, http.client.HTTPException):
             raise NormalizedError("disconnected", retryable=True, provider=self.name) from None
         finally:

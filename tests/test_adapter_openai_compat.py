@@ -164,3 +164,47 @@ def test_429_without_error_body_keeps_the_generic_mapping(json_upstream):
     with pytest.raises(NormalizedError) as caught:
         asyncio.run(adapter.complete(request(), admission()))
     assert caught.value.code == "quota_exhausted"
+
+
+
+TOOL_CALLS_BODY = json.dumps(
+    {
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {"id": "call_1", "type": "function", "function": {"name": "read", "arguments": "{\"path\":\"a.txt\"}"}}
+                    ],
+                },
+                "finish_reason": "tool_calls",
+            }
+        ],
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+    }
+)
+
+
+def test_tool_calls_are_returned(json_upstream):
+    adapter = OpenAICompatAdapter(base_url(json_upstream), KEY)
+    json_upstream.configure(body=TOOL_CALLS_BODY)
+    result = asyncio.run(adapter.complete(request(), admission()))
+    assert result.content == ""
+    assert result.finish_reason == "tool_calls"
+    assert len(result.tool_calls) == 1
+    call = result.tool_calls[0]
+    assert call["id"] == "call_1"
+    assert call["function"]["name"] == "read"
+    assert call["function"]["arguments"] == '{"path":"a.txt"}'
+
+
+def test_malformed_tool_calls_are_invalid_response(json_upstream):
+    adapter = OpenAICompatAdapter(base_url(json_upstream), KEY)
+    json_upstream.configure(
+        body=json.dumps({"choices": [{"message": {"role": "assistant", "content": "", "tool_calls": [{"id": 1}]}, "finish_reason": "tool_calls"}]})
+    )
+    with pytest.raises(NormalizedError) as caught:
+        asyncio.run(adapter.complete(request(), admission()))
+    assert caught.value.code == "invalid_response"

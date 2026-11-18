@@ -53,7 +53,7 @@ python scripts/real_smoke.py       # 真实验收（启动网关 + 真实 DSH）
 
 ## 待办（拿到 Key 后）
 
-1. 用真实 Key 调一次非流式 + 一次流式，确认响应体形状与 `usage` 字段
+1. `python scripts/real_probe.py --stream --tools`：用真实 Key 直接探针（非流式 / 流式 / 工具调用三条路径，成本极小），确认响应体形状、`usage` 与 `tool_calls`
 2. 跑 `scripts/real_smoke.py`（真实 DSH 走网关）
 3. 若 429 出现，核对实际 `error.code` 与上表是否一致
 4. 记录证据与验收结果

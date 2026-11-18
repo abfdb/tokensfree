@@ -140,3 +140,49 @@ def test_finish_reason_is_forwarded_to_the_client():
                                       services=services, request_id="req-finish"))
     assert outcome.status == 200
     assert outcome.body["choices"][0]["finish_reason"] == "length"
+
+
+
+class ToolCallAdapter:
+    capabilities = frozenset({"text", "tools"})
+
+    async def complete(self, request, admission):
+        from tokensfree.adapters.base import ChatResult
+
+        return ChatResult(
+            content="",
+            finish_reason="tool_calls",
+            tool_calls=({"id": "call_x", "type": "function", "function": {"name": "read", "arguments": "{}"}},),
+        )
+
+
+def test_tool_calls_are_forwarded_to_the_client():
+    spec = ProviderSpec("alpha", "mock-a", "mock_zero_cost", 200, frozenset({"text", "tools"}))
+    services = type("S", (), {})()
+    services.specs = (spec,)
+    services.adapters = {"alpha": ToolCallAdapter()}
+    services.authorized = frozenset({"alpha"})
+    services.idempotency = None
+    services.ledger = None
+    services.events = None
+    services.breakers = None
+
+    def gate(candidate):
+        from tokensfree.router.admission import admit as real_admit
+
+        return real_admit(candidate, load_config({}), frozenset({"alpha"}), 100)
+
+    services.admit = gate
+    outcome = asyncio.run(
+        handle_chat(
+            {"model": "tokensfree-auto", "messages": [{"role": "user", "content": "hi"}],
+             "tools": [{"type": "function", "function": {"name": "read"}}]},
+            services=services,
+            request_id="req-toolcalls",
+        )
+    )
+    assert outcome.status == 200
+    choice = outcome.body["choices"][0]
+    assert choice["finish_reason"] == "tool_calls"
+    assert choice["message"]["tool_calls"][0]["id"] == "call_x"
+    assert choice["message"]["content"] == ""

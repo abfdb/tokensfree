@@ -28,6 +28,7 @@ class ChatResult:
     finish_reason: str = "stop"
     model: str = ""
     usage: dict | None = None
+    tool_calls: tuple = ()
 
 
 class NormalizedError(Exception):
