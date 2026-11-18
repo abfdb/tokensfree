@@ -29,6 +29,8 @@ python -m venv .venv
 ~~~powershell
 $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
 .venv\Scripts\python -m tokensfree --port 8766          # 等价于 python -m tokensfree.edge.host
+# 默认使用进程内 SQLite（:memory:）；要跨重启保留幂等与事件，指定文件：
+.venv\Scripts\python -m tokensfree --port 8766 --db .\tokensfree.db
 ~~~
 
 端点：`GET /v1/models`、`POST /v1/chat/completions`（非流式）。
@@ -59,6 +61,18 @@ $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
 | `TOKENSFREE_PORT` / `TOKENSFREE_MAX_BODY_BYTES` / `TOKENSFREE_TIMEOUT_S` | 启动参数（由 `load_config` 校验） |
 
 令牌不是供应商 API Key；不要写进日志、Git 或聊天。
+
+### 幂等请求
+
+带 `Idempotency-Key` 头的相同请求只会真正执行一次，重放返回完全相同的响应体（跨重启也有效，前提是 `--db` 指向文件）：
+
+```sh
+curl -s http://127.0.0.1:8766/v1/chat/completions -H "Host: 127.0.0.1:8766" -H "Authorization: Bearer $TOKENSFREE_LOCAL_TOKEN" \
+  -H 'Content-Type: application/json' -H 'Idempotency-Key: demo-1' \
+  -d '{"model":"tokensfree-auto","messages":[{"role":"user","content":"hi"}]}'
+```
+
+同一 key 换 payload → `409 idempotency_conflict`。
 
 ## 4. 验收
 

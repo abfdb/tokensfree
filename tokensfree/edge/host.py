@@ -224,29 +224,37 @@ def main():
     from tokensfree.config import load_config
     from tokensfree.edge.asgi import make_asgi_app
     from tokensfree.edge.backend import MemoryBackend
-    from tokensfree.runtime import build_loopback_streaming_runtime, build_mock_runtime
+    from tokensfree.runtime import Storage, build_loopback_streaming_runtime, build_mock_runtime
 
     parser = argparse.ArgumentParser(description="Serve the tokensfree ASGI app on loopback")
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument("--loopback", type=int, default=None,
                         help="port of a local SSE fixture upstream; enables streaming instead of the mock runtime")
+    parser.add_argument("--db", default=":memory:",
+                        help="SQLite path for idempotency/ledger/events (default: in-memory, process lifetime)")
     args = parser.parse_args()
     config = load_config(os.environ)
     if config.local_token is None:
         raise SystemExit("TOKENSFREE_LOCAL_TOKEN must be set for the new backend")
+    storage = Storage.open(args.db)
     if args.loopback is None:
-        runtime = build_mock_runtime(config=config)
+        runtime = build_mock_runtime(config=config, storage=storage)
         mode = "mock runtime (no streaming provider)"
     else:
-        runtime = build_loopback_streaming_runtime(args.loopback, config=config)
+        runtime = build_loopback_streaming_runtime(args.loopback, config=config, storage=storage)
         mode = "loopback streaming runtime -> 127.0.0.1:%d" % args.loopback
     backend = MemoryBackend(config=config, services=runtime.services, port=args.port, token=config.local_token)
     host = AsgiHost(make_asgi_app(backend), port=args.port, max_body=config.max_body_bytes)
-    print("tokensfree ASGI backend: http://127.0.0.1:%d [%s] (Ctrl+C to stop)" % (args.port, mode), flush=True)
+    print(
+        "tokensfree ASGI backend: http://127.0.0.1:%d [%s] (db=%s, Ctrl+C to stop)" % (args.port, mode, args.db),
+        flush=True,
+    )
     try:
         asyncio.run(host.run_forever())
     except KeyboardInterrupt:
         host.stop()
+    finally:
+        storage.close()
 
 
 if __name__ == "__main__":

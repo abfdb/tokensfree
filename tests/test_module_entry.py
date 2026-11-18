@@ -21,6 +21,7 @@ def test_module_help_lists_the_host_flags():
     assert result.returncode == 0, result.stderr[-1000:]
     assert "--port" in result.stdout
     assert "--loopback" in result.stdout
+    assert "--db" in result.stdout
 
 
 def test_module_without_token_fails_closed():

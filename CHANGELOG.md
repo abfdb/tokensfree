@@ -15,7 +15,7 @@
 - 候选构建、准入闸门、有界重试执行（`router/candidates.py` / `admission.py` / `execute.py`）
 - 客户端模型选择：`tokensfree-auto` 由路由器决定，具体模型 id 精确匹配，未知模型返回 404 `model_not_found`
 - 账号调度（LRU / 冷却 / 并发上限）、熔断器、账号池（`router/scheduling.py` / `health.py` / `account_pool.py`）
-- SQLite 持久化：迁移、幂等键、只增账本、事件（`store/`）
+- SQLite 持久化：迁移、幂等键、只增账本、事件（`store/`），并接入可运行服务（`--db`，默认进程内）
 
 **边缘与协议**
 - OpenAI 形状的请求解析与响应构造（`edge/protocol.py`），含工具形状严格校验
