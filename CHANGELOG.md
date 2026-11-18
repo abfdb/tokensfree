@@ -41,6 +41,7 @@
 - `/api/status` 含版本与运行时长；CLI 支持 `--version`
 - 真实调用闸门：开关 + 授权 + 未过期免费证据三者同时成立才放行（默认关闭）
 - 环境变量驱动的真实供应商装配（`--real` + `TOKENSFREE_REAL_*`）：D2 之后只需配置，不用改代码
+- 免费证据可直接从 `evidence_snapshot.py` 生成的快照读取（`TOKENSFREE_REAL_EVIDENCE_SNAPSHOT`），并校验 model/provider 绑定，避免手工抄时间戳出错
 - 多密钥轮换：`TOKENSFREE_REAL_API_KEYS`（1–8 个）为每个 key 建候选 provider，可重试限流自动切下一个 key；请求按 round-robin 分配首个尝试
 - key 支持从文件读取：`TOKENSFREE_REAL_API_KEY_FILE` / `_API_KEYS_FILE`（四个来源互斥）
 - 真实供应商验收脚本 `scripts/real_smoke.py`（`--fixture` 自检模式用本地假上游，真实模式驱动 DSH）

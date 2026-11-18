@@ -4,6 +4,7 @@ Turns configuration plus adapter instances into the Services the edge core needs
 Opening a socket and serving HTTP stay outside this module.
 """
 import hashlib
+import json
 import pathlib
 import time
 from dataclasses import dataclass
@@ -33,6 +34,10 @@ REAL_ENV_KEYS = (
     "TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT",
 )
 MAX_REAL_KEYS = 8
+EVIDENCE_SOURCE_VARS = (
+    "TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT",
+    "TOKENSFREE_REAL_EVIDENCE_SNAPSHOT",
+)
 REAL_DEFAULT_CAPABILITIES = frozenset({"text", "stream", "tools"})
 
 
@@ -235,26 +240,73 @@ def real_keys_from_env(env):
     return tuple(keys)
 
 
+def _snapshot_expiry(path, *, provider, model):
+    """Expiry from a recorded evidence snapshot, bound to the configured model/provider."""
+    try:
+        raw = pathlib.Path(str(path)).read_text(encoding="utf-8")
+    except OSError:
+        raise ValueError("cannot read evidence snapshot") from None
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        raise ValueError("evidence snapshot is not valid JSON") from None
+    if not isinstance(data, dict):
+        raise ValueError("evidence snapshot must be a JSON object")
+    snapshot_model = str(data.get("model", "")).strip()
+    if not snapshot_model:
+        raise ValueError("evidence snapshot has no model")
+    if snapshot_model.lower() != model.strip().lower():
+        raise ValueError("evidence snapshot is for model %r, configured %r" % (snapshot_model, model))
+    snapshot_provider = str(data.get("provider", "")).strip()
+    if snapshot_provider and snapshot_provider.lower() != provider.strip().lower():
+        raise ValueError("evidence snapshot is for provider %r, configured %r" % (snapshot_provider, provider))
+    expires_at = data.get("evidence_expires_at")
+    if type(expires_at) not in (int, float) or isinstance(expires_at, bool):
+        raise ValueError("evidence snapshot has no numeric evidence_expires_at")
+    return float(expires_at)
+
+
+def evidence_expiry_from_env(env, *, provider, model):
+    inline = str(env.get("TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT", "")).strip()
+    snapshot = str(env.get("TOKENSFREE_REAL_EVIDENCE_SNAPSHOT", "")).strip()
+    if inline and snapshot:
+        raise ValueError(
+            "set only one of TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT and TOKENSFREE_REAL_EVIDENCE_SNAPSHOT"
+        )
+    if inline:
+        try:
+            return float(inline)
+        except ValueError:
+            raise ValueError("TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT must be a unix timestamp") from None
+    if not snapshot:
+        raise ValueError(
+            "missing real-provider environment: TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT"
+            " (or TOKENSFREE_REAL_EVIDENCE_SNAPSHOT)"
+        )
+    return _snapshot_expiry(snapshot, provider=provider, model=model)
+
+
 def real_specs_from_env(env, *, clock=time.time):
     """One ProviderSpec per key; extra keys become provider-2, provider-3, ..."""
+    skipped = EVIDENCE_SOURCE_VARS + ("TOKENSFREE_REAL_API_KEY",)
     base_missing = [
-        key for key in REAL_ENV_KEYS if key != "TOKENSFREE_REAL_API_KEY" and not str(env.get(key, "")).strip()
+        key for key in REAL_ENV_KEYS if key not in skipped and not str(env.get(key, "")).strip()
     ]
     keys_missing = not any(str(env.get(name, "")).strip() for name in KEY_SOURCE_VARS)
-    if base_missing or keys_missing:
+    evidence_missing = not any(str(env.get(name, "")).strip() for name in EVIDENCE_SOURCE_VARS)
+    if base_missing or keys_missing or evidence_missing:
         names = list(base_missing)
         if keys_missing:
             names.append("TOKENSFREE_REAL_API_KEY (or _API_KEYS / _API_KEY_FILE / _API_KEYS_FILE)")
+        if evidence_missing:
+            names.append("TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT (or TOKENSFREE_REAL_EVIDENCE_SNAPSHOT)")
         raise ValueError("missing real-provider environment: " + ", ".join(names))
     keys = real_keys_from_env(env)
     provider = str(env["TOKENSFREE_REAL_PROVIDER"]).strip()
     model = str(env["TOKENSFREE_REAL_MODEL"]).strip()
     if not provider or not model:
         raise ValueError("provider and model must be non-empty")
-    try:
-        expires_at = float(env["TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT"])
-    except (TypeError, ValueError):
-        raise ValueError("TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT must be a unix timestamp") from None
+    expires_at = evidence_expiry_from_env(env, provider=provider, model=model)
     now = clock()
     if expires_at <= now:
         raise ValueError("TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT is in the past; refresh the free-tier evidence")

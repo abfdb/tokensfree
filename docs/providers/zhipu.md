@@ -51,6 +51,15 @@ python scripts/real_smoke.py       # 真实验收（启动网关 + 真实 DSH）
 
 多个免费额度的账号可以用 `TOKENSFREE_REAL_API_KEYS=key1,key2`（最多 8 个）同时接入：每个 key 是一个候选 provider，遇到可重试限流（1302/1305）会自动切到下一个 key。
 
+免费证据可以一条命令刷新并绑定到模型：
+
+```sh
+.venv\\Scripts\\python scripts/evidence_snapshot.py --provider zhipu --model glm-4.7-flash
+$env:TOKENSFREE_REAL_EVIDENCE_SNAPSHOT = ".superpowers\evidence\zhipu-<时间戳>.json"
+```
+
+启动时会校验快照里的 `model` / `provider` 与配置一致；快照过期或指向别的模型都会 fail-closed。
+
 免费证据建议每 30 天复核一次定价页后更新 `TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT`，并把 URL 与抓取时间记入 `.superpowers/` 下的进度账本（不进 Git 的内容）。
 
 ## 待办（拿到 Key 后）

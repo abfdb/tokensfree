@@ -25,10 +25,12 @@ if str(ROOT) not in sys.path:
 
 from tokensfree.adapters.base import ChatRequest  # noqa: E402
 from tokensfree.config import load_config  # noqa: E402
-from tokensfree.runtime import KEY_SOURCE_VARS, REAL_ENV_KEYS, build_real_runtime  # noqa: E402
+from tokensfree.runtime import EVIDENCE_SOURCE_VARS, KEY_SOURCE_VARS, REAL_ENV_KEYS, build_real_runtime  # noqa: E402
 
 PROMPT = "Reply with the single word OK and nothing else."
-REAL_REQUIRED = tuple(key for key in REAL_ENV_KEYS if key != "TOKENSFREE_REAL_API_KEY") + ("TOKENSFREE_ENABLE_REAL",)
+REAL_REQUIRED = tuple(
+    key for key in REAL_ENV_KEYS if key not in EVIDENCE_SOURCE_VARS + ("TOKENSFREE_REAL_API_KEY",)
+) + ("TOKENSFREE_ENABLE_REAL",)
 FIXTURE_JSON = json.dumps(
     {
         "choices": [{"index": 0, "message": {"role": "assistant", "content": "OK"}, "finish_reason": "stop"}],
@@ -135,6 +137,8 @@ def main():
         missing = [key for key in REAL_REQUIRED if not str(env.get(key, "")).strip()]
         if not any(str(env.get(key, "")).strip() for key in KEY_SOURCE_VARS):
             missing.append("TOKENSFREE_REAL_API_KEY")
+        if not any(str(env.get(key, "")).strip() for key in EVIDENCE_SOURCE_VARS):
+            missing.append("TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT")
         if missing:
             print(json.dumps({"verified": False, "reason": "missing_env", "missing": missing}, indent=2))
             return 2

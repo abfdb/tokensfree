@@ -32,7 +32,10 @@ REAL_KEYS = (
     "TOKENSFREE_REAL_PROVIDER",
     "TOKENSFREE_REAL_BASE_URL",
     "TOKENSFREE_REAL_MODEL",
+)
+EVIDENCE_SOURCE_VARS = (
     "TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT",
+    "TOKENSFREE_REAL_EVIDENCE_SNAPSHOT",
 )
 KEY_SOURCE_VARS = (
     "TOKENSFREE_REAL_API_KEY",
@@ -178,6 +181,8 @@ def main():
         missing = [key for key in REAL_KEYS if not str(env.get(key, "")).strip()]
         if not any(str(env.get(key, "")).strip() for key in KEY_SOURCE_VARS):
             missing.append("TOKENSFREE_REAL_API_KEY")
+        if not any(str(env.get(key, "")).strip() for key in EVIDENCE_SOURCE_VARS):
+            missing.append("TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT")
         if env.get("TOKENSFREE_ENABLE_REAL") != "1":
             missing.append("TOKENSFREE_ENABLE_REAL=1")
         if missing:
