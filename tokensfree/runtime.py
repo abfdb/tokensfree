@@ -79,10 +79,11 @@ def build_mock_runtime(*, config=None, clock=time.time, ttl_s=60.0):
     )
 
 
-def build_loopback_streaming_runtime(port, *, config=None, clock=time.time, ttl_s=60.0, timeout=5.0):
+def build_loopback_streaming_runtime(port, *, config=None, clock=time.time, ttl_s=60.0, timeout=5.0, tools=False):
     """Runtime whose single provider speaks SSE to a local fixture upstream."""
     config = load_config({}) if config is None else config
-    spec = ProviderSpec("loopback", "fixture-model", "mock_zero_cost", clock() + ttl_s, frozenset({"text", "stream"}))
+    capabilities = frozenset({"text", "stream"} | ({"tools"} if tools else set()))
+    spec = ProviderSpec("loopback", "fixture-model", "mock_zero_cost", clock() + ttl_s, capabilities)
     return Runtime(
         config=config,
         services=build_services(

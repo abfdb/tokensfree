@@ -308,3 +308,22 @@ DSH 的自定义 provider 走 `dsh-llm-pi-ai` 的 hand-declared route。实测�
 ### 未完成的验收
 
 G1（DSH 工具往返）、G2（默认零外发的 HTTP 侧证明）、G5 的 keyring 部分，均依赖 D1/D2 确认后实现；G3/G4/G6/G7 已由当前测试覆盖。
+
+
+### 附录 E：真实 DSH 冒烟结果（2026-11-18）
+
+`scripts/dsh_smoke.py` 已用**真实打包的 DSH 0.2.2-rc.1 headless 客户端**对本地新后端完成一次闭环：
+
+| 检查 | 结果 |
+|---|---|
+| 首轮请求 `stream:true` | ✅ |
+| 首轮携带 23 个工具定义并被网关转发 | ✅（此前适配器漏转发 tools，已修复） |
+| 工具调用与工具结果各一次（`read`） | ✅ |
+| 第二轮请求携带 `role:"tool"` 结果 | ✅ |
+| 最终文本匹配、DSH 退出码 0 | ✅ |
+
+过程中发现并修复的两个真实兼容性问题（都来自 DSH 实际请求形状）：
+1. DSH 默认请求 `max_tokens: 128000`，旧契约上限 32768 直接 400；
+2. 带 `tool_calls` 的 assistant 消息 `content: null`，旧契约要求必须为字符串。
+
+限制：上游是合成 SSE fixture，不是真实供应商；Windows 上无网络命名空间隔离，因此"零外发"由配置（仅 loopback baseURL）与脚本断言保证，不等同 Linux 命名空间证明。

@@ -89,14 +89,25 @@ mock 运行时没有流式适配器，因此 `stream:true` 会得到明确的 `4
 流式响应使用 `Transfer-Encoding: chunked`，帧序列为 role → content → finish → `[DONE]`。
 一旦 D1 选定服务器框架，同一个 ASGI app 可以换由 uvicorn/hypercorn 托管；aiohttp 后端也只是另一个 `Backend` 实现。
 
-> 新内核的验证：`python -m pytest -q` 共 289 项（含 5 个端到端用例：真实本地 HTTP 假上游 → 传输 → 解析 → 流式核心 → 客户端帧）。
+### 真实 DSH 冒烟（合成上游）
+
+`scripts/dsh_smoke.py` 用**真实打包的 DSH headless 客户端**打新后端：合成上游第一轮返回一次 `read` 工具调用，第二轮返回固定最终文本。
+
+```sh
+.venv\Scripts\python scripts/dsh_smoke.py <node.exe> <dsh/lib/bin.js>
+```
+
+已验证：DSH 首轮请求带 `stream:true` 与 23 个工具定义、网关转发成功、工具调用与结果各一次、最终文本匹配、DSH 退出码 0。
+注意：打包版 DSH 在 `app.asar` 内，普通 node/Python 读不到；需先解包到真实目录，或用 Electron 的 node 运行（脚本会自动选择）。
+
+> 新内核的验证：`python -m pytest -q` 共 292 项（含 5 个端到端用例：真实本地 HTTP 假上游 → 传输 → 解析 → 流式核心 → 客户端帧）。
 
 ## 验证
 
 ```sh
 python -m pip install -r requirements-dev.txt
 python -m ruff check .
-python -m pytest -q          # 289 项，Windows/macOS/Linux 三平台一致
+python -m pytest -q          # 292 项，Windows/macOS/Linux 三平台一致
 python check_dsh_contract.py # 8 项契约矩阵，退出 0 表示拒绝行为符合预期
 ```
 
