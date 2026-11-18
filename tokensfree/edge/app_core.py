@@ -182,9 +182,14 @@ async def handle_chat(payload, *, services, request_id, developer_role_policy="m
         raise
 
     if reserved:
-        repository.complete(
-            idempotency_key,
-            json.dumps({"status": outcome.status, "body": outcome.body}, ensure_ascii=False),
-        )
+        try:
+            repository.complete(
+                idempotency_key,
+                json.dumps({"status": outcome.status, "body": outcome.body}, ensure_ascii=False),
+            )
+        except KeyError:
+            # The reservation expired (TTL) while this request was running. The
+            # response is still valid; only the replay record is gone.
+            pass
     _record(services, outcome, request_id=request_id, account_id=account_id, started=started)
     return outcome

@@ -117,3 +117,21 @@ def test_transport_target_rules():
         OpenAICompatAdapter("http://127.0.0.1:1/v1", "")           # empty key
     with pytest.raises(ValueError):
         OpenAICompatAdapter("ftp://127.0.0.1/v1", KEY)
+
+
+
+def test_stream_deadline_stops_a_dripping_upstream():
+    server = SSEUpstream(SSE, delay_s=0.2)
+    server.start()
+    try:
+        adapter = OpenAICompatAdapter(base_url(server), KEY, max_stream_s=0.01)
+
+        async def run_all():
+            return [event async for event in adapter.stream(request(), admission())]
+
+        with pytest.raises(NormalizedError) as caught:
+            asyncio.run(run_all())
+        assert caught.value.code == "timeout"
+        assert caught.value.retryable is True
+    finally:
+        server.stop()

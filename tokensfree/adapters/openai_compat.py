@@ -10,6 +10,7 @@ never logged and never included in error strings.
 import asyncio
 import http.client
 import json
+import time
 from urllib.parse import urlsplit
 
 from tokensfree.adapters.base import Admission, ChatRequest, ChatResult, NormalizedError, classify_status
@@ -23,7 +24,7 @@ LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 class OpenAICompatAdapter:
     capabilities = frozenset({"text", "stream", "tools"})
 
-    def __init__(self, base_url, api_key, *, timeout=15.0, capabilities=None, allow_remote=False):
+    def __init__(self, base_url, api_key, *, timeout=15.0, max_stream_s=120.0, capabilities=None, allow_remote=False):
         if not isinstance(api_key, str) or not api_key:
             raise ValueError("api_key must be a non-empty string")
         if not isinstance(base_url, str):
@@ -48,6 +49,9 @@ class OpenAICompatAdapter:
         self._path = (parts.path.rstrip("/") or "") + "/chat/completions"
         self._key = api_key
         self._timeout = float(timeout)
+        if type(max_stream_s) not in (int, float) or isinstance(max_stream_s, bool) or not 0 < max_stream_s <= 300:
+            raise ValueError("invalid max_stream_s")
+        self._max_stream_s = float(max_stream_s)
         self.capabilities = frozenset(capabilities) if capabilities is not None else type(self).capabilities
 
     @property
@@ -157,10 +161,13 @@ class OpenAICompatAdapter:
         connection = None
         try:
             connection, response = self._open(body, stream=True)
+            deadline = time.monotonic() + self._max_stream_s
             while True:
                 line = response.readline(MAX_LINE_BYTES + 1)
                 if not line:
                     break
+                if time.monotonic() > deadline:
+                    raise NormalizedError("timeout", retryable=True, provider=self.name)
                 if len(line) > MAX_LINE_BYTES:
                     raise NormalizedError("invalid_response", retryable=False, provider=self.name)
                 yield line.decode("utf-8", errors="strict")

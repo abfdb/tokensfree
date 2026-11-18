@@ -4,6 +4,7 @@ Not a test module: tests import SSEUpstream and configure status/body per case.
 """
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DEFAULT_SSE = (
@@ -30,17 +31,20 @@ def _make_handler(owner):
             for name, value in owner.headers.items():
                 self.send_header(name, value)
             self.end_headers()
+            if owner.delay_s:
+                time.sleep(owner.delay_s)
             self.wfile.write(payload)
 
     return Handler
 
 
 class SSEUpstream:
-    def __init__(self, body=DEFAULT_SSE, *, status=200, content_type="text/event-stream", headers=None):
+    def __init__(self, body=DEFAULT_SSE, *, status=200, content_type="text/event-stream", headers=None, delay_s=0.0):
         self.body = body
         self.status = status
         self.content_type = content_type
         self.headers = dict(headers or {})
+        self.delay_s = float(delay_s)
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(self))
         self._thread = None
 

@@ -5,6 +5,8 @@ deadline, bounded line length. Real origins need D2 and a separate allowlist.
 """
 import asyncio
 import http.client
+import json
+import time
 
 from tokensfree.adapters.base import Admission, ChatRequest, NormalizedError, classify_status
 from tokensfree.adapters.stream_parse import parse_data_line
@@ -14,7 +16,7 @@ MAX_LINE_BYTES = 65536
 
 
 class LoopbackSSETransport:
-    def __init__(self, port, *, timeout=5.0, path="/v1/chat/completions", token=FIXTURE_TOKEN):
+    def __init__(self, port, *, timeout=5.0, max_stream_s=60.0, path="/v1/chat/completions", token=FIXTURE_TOKEN):
         if type(port) is not int or not 1 <= port <= 65535:
             raise ValueError("invalid loopback port")
         if type(timeout) not in (int, float) or isinstance(timeout, bool) or not 0 < timeout <= 30:
@@ -23,10 +25,13 @@ class LoopbackSSETransport:
             raise ValueError("invalid path")
         if not isinstance(token, str) or not token:
             raise ValueError("invalid token")
+        if type(max_stream_s) not in (int, float) or isinstance(max_stream_s, bool) or not 0 < max_stream_s <= 300:
+            raise ValueError("invalid max_stream_s")
         self.port = port
         self.timeout = float(timeout)
         self.path = path
         self.token = token
+        self.max_stream_s = float(max_stream_s)
 
     def _retry_after(self, response):
         raw = response.getheader("Retry-After")
@@ -59,10 +64,13 @@ class LoopbackSSETransport:
                 error = classify_status(response.status, self._retry_after(response))
                 error.provider = "loopback"
                 raise error
+            deadline = time.monotonic() + self.max_stream_s
             while True:
                 line = response.readline(MAX_LINE_BYTES + 1)
                 if not line:
                     break
+                if time.monotonic() > deadline:
+                    raise NormalizedError("timeout", retryable=True, provider="loopback")
                 if len(line) > MAX_LINE_BYTES:
                     raise NormalizedError("invalid_response", retryable=False, provider="loopback")
                 yield line.decode("utf-8", errors="strict")
@@ -84,8 +92,6 @@ class LoopbackStreamingAdapter:
             raise TypeError("request must be a ChatRequest")
         if not isinstance(admission, Admission):
             raise TypeError("admission must be issued by the router")
-        import json
-
         payload = {
             "model": request.model or "fixture-model",
             "messages": [dict(message) for message in request.messages],

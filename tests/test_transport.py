@@ -23,6 +23,16 @@ def upstream():
         server.stop()
 
 
+@pytest.fixture()
+def dripping_upstream():
+    server = SSEUpstream(delay_s=0.2)
+    server.start()
+    try:
+        yield server
+    finally:
+        server.stop()
+
+
 def adapter_request():
     from tokensfree.adapters.base import ChatRequest
 
@@ -146,3 +156,12 @@ def test_streaming_adapter_forwards_tools():
     assert sent["tools"][0]["function"]["name"] == "read"
     assert sent["tool_choice"] == "auto"
     assert sent["stream"] is True
+
+
+
+def test_stream_deadline_stops_a_dripping_upstream(dripping_upstream):
+    transport = LoopbackSSETransport(dripping_upstream.port, max_stream_s=0.01)
+    with pytest.raises(NormalizedError) as caught:
+        list(transport.iter_lines(b"{}"))
+    assert caught.value.code == "timeout"
+    assert caught.value.retryable is True
