@@ -6,6 +6,7 @@ Retry rules (fail-closed):
   has received no byte;
 - once a byte was emitted the error is final: providers are never stitched.
 """
+import time
 from dataclasses import dataclass
 
 from tokensfree.adapters.base import NormalizedError
@@ -33,8 +34,12 @@ class Execution:
     attempts: tuple
 
 
-async def execute(candidates, *, admit, request, max_attempts=2, first_byte_sent=None):
-    """Try candidates in order. Raises the last NormalizedError or NoProviderAvailable."""
+async def execute(candidates, *, admit, request, max_attempts=2, first_byte_sent=None, breaker_for=None, clock=time.time):
+    """Try candidates in order. Raises the last NormalizedError or NoProviderAvailable.
+
+    breaker_for(spec) may return a CircuitBreaker: an open circuit skips the
+    candidate without calling its adapter, and outcomes feed the breaker back.
+    """
     if type(max_attempts) is not int or max_attempts < 1:
         raise ValueError("max_attempts must be a positive int")
     trace = []
@@ -42,6 +47,10 @@ async def execute(candidates, *, admit, request, max_attempts=2, first_byte_sent
     for candidate in candidates:
         if len(trace) >= max_attempts:
             break
+        breaker = breaker_for(candidate.spec) if breaker_for is not None else None
+        if breaker is not None and not breaker.allows(clock()):
+            trace.append((candidate.spec.name, "circuit_open"))
+            continue
         try:
             admission = admit(candidate.spec)
         except AdmissionDenied as denied:
@@ -50,12 +59,16 @@ async def execute(candidates, *, admit, request, max_attempts=2, first_byte_sent
         try:
             result = await candidate.adapter.complete(request, admission)
         except NormalizedError as error:
+            if breaker is not None:
+                breaker.record_failure(clock())
             trace.append((candidate.spec.name, error.code))
             last_error = error
             streaming_started = first_byte_sent is not None and first_byte_sent()
             if not error.retryable or streaming_started or len(trace) >= max_attempts:
                 raise
             continue
+        if breaker is not None:
+            breaker.record_success(clock())
         trace.append((candidate.spec.name, "success"))
         return Execution(result=result, provider=candidate.spec.name, attempts=tuple(trace))
     if last_error is not None:
