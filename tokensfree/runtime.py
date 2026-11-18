@@ -288,15 +288,21 @@ def build_real_runtime(*, config, env, clock=time.time, storage=None, timeout=15
 
         account_ids = {}
         for spec, key in zip(specs, keys):
-            account_ids[spec.name] = accounts.ensure(
+            fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()
+            account_id = accounts.ensure(
                 spec.name,
                 "env-key",
                 "env:" + spec.name,
-                hashlib.sha256(key.encode("utf-8")).hexdigest(),
+                fingerprint,
                 now=clock(),
                 tier="free_verified",
                 status="active",
             )
+            row = accounts.get(account_id)
+            if row is not None and row["fingerprint"] != fingerprint:
+                # The operator replaced this key: treat the account as fresh again.
+                accounts.refresh_credentials(account_id, fingerprint, status="active")
+            account_ids[spec.name] = account_id
     adapters = {
         spec.name: OpenAICompatAdapter(
             base_url,

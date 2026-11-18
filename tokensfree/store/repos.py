@@ -97,6 +97,15 @@ class AccountsRepo:
         ).fetchone()
         return row["id"]
 
+    def refresh_credentials(self, account_id, fingerprint, *, status="active", now=None):
+        """A replaced key gets a fresh fingerprint and is reactivated (cooldown cleared)."""
+        self._conn.execute(
+            "UPDATE accounts SET fingerprint = ?, status = ?, cooldown_until = NULL WHERE id = ?",
+            (fingerprint, status, account_id),
+        )
+        self._conn.commit()
+        return self.get(account_id)
+
     def get(self, account_id):
         return self._conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
 
