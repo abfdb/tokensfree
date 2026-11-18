@@ -63,13 +63,24 @@ def prepare_stream(payload, *, services, request_id, developer_role_policy="map"
     return StreamPlan(parsed=parsed, candidates=tuple(candidates), request_id=request_id)
 
 
-async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=time.time, on_error=None):
+async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=time.time, on_error=None, on_settled=None):
     """Yield response bytes. Raises NormalizedError or NoProviderAvailable.
 
     An open circuit skips its candidate without opening an upstream connection.
+    on_settled(provider, error_code) fires exactly once with the terminal outcome
+    so the backend can write ledger/event rows for streaming requests too.
     """
     trace = []
     last_error = None
+    attempted = None
+    settled = []
+
+    def settle(provider_name, error_code):
+        if settled:
+            return
+        settled.append(True)
+        if on_settled is not None:
+            on_settled(provider_name, error_code)
     for spec, adapter in plan.candidates:
         if len(trace) >= max_attempts:
             break
@@ -82,6 +93,7 @@ async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=ti
         except AdmissionDenied as denied:
             trace.append((spec.name, "denied:" + denied.reason))
             continue
+        attempted = spec.name
         encoder = SseEncoder(model=spec.name, request_id=plan.request_id)
         include_usage = bool(getattr(plan.parsed, "include_usage", False))
         usage = None
@@ -116,6 +128,7 @@ async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=ti
                     yield encoder.chunk({}, finish_reason=event.finish_reason or "stop")
                     finish_emitted = True
                     if not include_usage:
+                        settle(spec.name, None)
                         yield encoder.done()
                         return
                     continue
@@ -130,12 +143,14 @@ async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=ti
                             breaker.record_success(clock())
                         yield encoder.chunk({}, finish_reason="stop")
                         finish_emitted = True
+                    settle(spec.name, None)
                     if include_usage and usage is not None:
                         yield encoder.usage(usage)
                     yield encoder.done()
                     return
             if finish_emitted:
                 # finish already reached; a missing [DONE] is tolerated once usage is delivered.
+                settle(spec.name, None)
                 if include_usage and usage is not None:
                     yield encoder.usage(usage)
                 yield encoder.done()
@@ -147,24 +162,31 @@ async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=ti
             if on_error is not None:
                 on_error(spec, error)
             if emitted:
+                settle(spec.name, error.code)
                 yield encoder.error(error.code)
                 return
             trace.append((spec.name, error.code))
             last_error = error
             if len(trace) >= max_attempts:
+                settle(spec.name, error.code)
                 raise
             if not error.retryable and error.code not in ACCOUNT_SCOPED_ERRORS:
+                settle(spec.name, error.code)
                 raise
             continue
         # The adapter's stream ended without finish/[DONE]: treat it as truncated,
         # never as a successful end, and never fall through silently.
         if emitted:
+            settle(spec.name, "upstream_disconnected")
             yield encoder.error("upstream_disconnected")
             return
         trace.append((spec.name, "upstream_disconnected"))
         last_error = NormalizedError("upstream_disconnected", retryable=True, provider=spec.name)
         if len(trace) >= max_attempts:
+            settle(spec.name, "upstream_disconnected")
             raise last_error
     if last_error is not None:
+        settle(attempted, last_error.code)
         raise last_error
+    settle(attempted, "no_free_provider")
     raise NoProviderAvailable(trace)

@@ -211,6 +211,22 @@ def _record(services, outcome, *, request_id, account_id, started):
         )
 
 
+def record_stream_result(services, *, request_id, started, provider=None, error_code=None, status=None):
+    """Ledger/event row for a streaming request, mirroring _record for JSON responses."""
+    outcome = ChatOutcome(
+        status=status if status is not None else (200 if error_code is None else 502),
+        body={"error": {"code": error_code}} if error_code is not None else {},
+        request_id=request_id,
+        provider=provider,
+    )
+    account = account_for(services, provider)
+    safe_bookkeeping(
+        lambda: _record(services, outcome, request_id=request_id, account_id=account, started=started),
+        request_id=request_id,
+        outcome="stream_bookkeeping_failed",
+    )
+
+
 async def handle_chat(payload, *, services, request_id, developer_role_policy="map", idempotency_key=None, account_id=None):
     started = time.time()
     if idempotency_key is not None and (not isinstance(idempotency_key, str) or not 1 <= len(idempotency_key) <= MAX_IDEMPOTENCY_KEY_CHARS):

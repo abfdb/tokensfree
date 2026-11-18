@@ -11,7 +11,7 @@ from dataclasses import dataclass, replace
 
 from tokensfree import __version__
 
-from tokensfree.edge.app_core import account_failure_hook, breaker_lookup, handle_chat
+from tokensfree.edge.app_core import account_failure_hook, breaker_lookup, handle_chat, record_stream_result
 from tokensfree.edge.auth import bearer_token, origin_allowed, token_matches
 from tokensfree.edge.models import models_payload
 from tokensfree.edge.protocol import build_error
@@ -144,15 +144,31 @@ class MemoryBackend:
         except (ValueError, UnicodeError, RecursionError):
             return self._error(ErrorCode.invalid_request, request_id)
         if isinstance(payload, dict) and payload.get("stream") is True:
+            started = time.time()
             plan = prepare_stream(payload, services=self.services, request_id=request_id)
             if isinstance(plan, StreamFailure):
+                code = None
+                if isinstance(plan.body, dict) and isinstance(plan.body.get("error"), dict):
+                    code = plan.body["error"].get("code")
+                record_stream_result(self.services, request_id=request_id, started=started, error_code=code, status=plan.status)
                 return self._json(plan.status, plan.body)
             headers = {"content-type": SSE_TYPE, **BASE_HEADERS}
+
+            def on_settled(provider, error_code):
+                record_stream_result(
+                    self.services,
+                    request_id=request_id,
+                    started=started,
+                    provider=provider,
+                    error_code=error_code,
+                )
+
             stream = iter_frames(
                 plan,
                 admit=self.services.admit,
                 breaker_for=breaker_lookup(self.services),
                 on_error=account_failure_hook(self.services, request_id),
+                on_settled=on_settled,
             )
             return EdgeResponse(status=200, headers=headers, stream=stream)
         outcome = await handle_chat(
