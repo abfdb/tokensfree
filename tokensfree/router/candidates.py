@@ -21,3 +21,19 @@ def build_candidates(specs, *, allowed, required=frozenset({"text"})):
             continue
         selected.append(spec)
     return tuple(selected)
+
+
+AUTO_MODEL = "tokensfree-auto"
+
+
+def specs_for_model(specs, requested):
+    """Resolve the client's model id to the providers that may serve it.
+
+    AUTO_MODEL means "let the router choose"; any other id must exactly match a
+    configured provider model. An empty result means model_not_found.
+    """
+    if not isinstance(requested, str) or not requested:
+        raise ValueError("requested must be a non-empty string")
+    if requested == AUTO_MODEL:
+        return tuple(specs)
+    return tuple(spec for spec in specs if spec.model == requested)

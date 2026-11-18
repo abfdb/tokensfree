@@ -12,7 +12,7 @@ from tokensfree.adapters.base import NormalizedError
 from tokensfree.edge.protocol import RequestRejected, build_error, parse_chat_payload
 from tokensfree.errors import ErrorCode
 from tokensfree.router.admission import AdmissionDenied
-from tokensfree.router.candidates import build_candidates
+from tokensfree.router.candidates import build_candidates, specs_for_model
 from tokensfree.router.execute import NoProviderAvailable
 from tokensfree.sse import SseEncoder
 
@@ -40,12 +40,16 @@ def prepare_stream(payload, *, services, request_id, developer_role_policy="map"
     if not parsed.stream:
         status, body = build_error(ErrorCode.invalid_request, request_id)
         return StreamFailure(status, body)
-    if parsed.requires_tools and not any("tools" in spec.capabilities for spec in services.specs):
+    eligible_specs = specs_for_model(services.specs, parsed.request.model)
+    if not eligible_specs:
+        status, body = build_error(ErrorCode.model_not_found, request_id)
+        return StreamFailure(status, body)
+    if parsed.requires_tools and not any("tools" in spec.capabilities for spec in eligible_specs):
         status, body = build_error(ErrorCode.unsupported_capability, request_id)
         return StreamFailure(status, body)
-    configured = frozenset(spec.name for spec in services.specs)
+    configured = frozenset(spec.name for spec in eligible_specs)
     candidates = []
-    for spec in build_candidates(services.specs, allowed=configured, required=parsed.capabilities):
+    for spec in build_candidates(eligible_specs, allowed=configured, required=parsed.capabilities):
         adapter = services.adapters.get(spec.name)
         if adapter is None or not hasattr(adapter, "stream"):
             continue

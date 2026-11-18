@@ -44,6 +44,12 @@ $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
 
 流式响应使用 `Transfer-Encoding: chunked`，帧序列 role → content → finish → `[DONE]`。
 
+## 3. 模型选择语义
+
+- `model: "tokensfree-auto"`：由路由器按配置顺序选择（默认行为）
+- `model: "<具体模型 id>"`：只使用 `/v1/models` 中该 id 对应的供应商；同 id 多供应商时按候选顺序回退
+- 未知模型 id：`404 model_not_found`（不会静默路由到别的模型）
+
 ## 3. 令牌与环境变量
 
 | 变量 | 作用 |

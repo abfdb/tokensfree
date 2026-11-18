@@ -17,7 +17,7 @@ from tokensfree.edge.protocol import (
     parse_chat_payload,
 )
 from tokensfree.errors import ErrorCode
-from tokensfree.router.candidates import build_candidates
+from tokensfree.router.candidates import build_candidates, specs_for_model
 from tokensfree.router.execute import Candidate, NoProviderAvailable, execute
 
 MAX_IDEMPOTENCY_KEY_CHARS = 200
@@ -90,12 +90,16 @@ async def _execute(payload, *, services, request_id, developer_role_policy):
     # Fail closed instead of silently degrading: this core has no streaming edge yet.
     if parsed.stream:
         return _failed(ErrorCode.unsupported_capability, request_id)
-    if parsed.requires_tools and not any("tools" in spec.capabilities for spec in services.specs):
+    # Client model narrowing: "tokensfree-auto" lets the router choose, any other
+    # id must name a configured model or the request is rejected.
+    eligible_specs = specs_for_model(services.specs, parsed.request.model)
+    if not eligible_specs:
+        return _failed(ErrorCode.model_not_found, request_id)
+    if parsed.requires_tools and not any("tools" in spec.capabilities for spec in eligible_specs):
         return _failed(ErrorCode.unsupported_capability, request_id)
 
-    # Client narrowing is not parsed yet: offer every configured spec and let admission decide.
-    configured = frozenset(spec.name for spec in services.specs)
-    candidates = build_candidates(services.specs, allowed=configured, required=parsed.capabilities)
+    configured = frozenset(spec.name for spec in eligible_specs)
+    candidates = build_candidates(eligible_specs, allowed=configured, required=parsed.capabilities)
     enriched = tuple(
         Candidate(spec=spec, adapter=services.adapters[spec.name])
         for spec in candidates

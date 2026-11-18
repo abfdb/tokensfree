@@ -13,6 +13,7 @@
 - 结构化日志与字段白名单（`obs.py`）
 - 适配器协议、准入凭据（不透明 `Admission`）、上游错误归一化（`adapters/base.py`）
 - 候选构建、准入闸门、有界重试执行（`router/candidates.py` / `admission.py` / `execute.py`）
+- 客户端模型选择：`tokensfree-auto` 由路由器决定，具体模型 id 精确匹配，未知模型返回 404 `model_not_found`
 - 账号调度（LRU / 冷却 / 并发上限）、熔断器、账号池（`router/scheduling.py` / `health.py` / `account_pool.py`）
 - SQLite 持久化：迁移、幂等键、只增账本、事件（`store/`）
 
