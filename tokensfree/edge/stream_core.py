@@ -1,0 +1,108 @@
+"""Streaming edge core: provider chunks -> client SSE frames.
+
+Terminal rules (fail-closed):
+- before the first frame is emitted, a retryable error may move to the next candidate;
+- after the first frame the error is final: emit one error event and stop;
+- a finished stream can never be extended by another provider.
+"""
+from dataclasses import dataclass
+
+from tokensfree.adapters.base import NormalizedError
+from tokensfree.edge.protocol import RequestRejected, build_error, parse_chat_payload
+from tokensfree.errors import ErrorCode
+from tokensfree.router.admission import AdmissionDenied
+from tokensfree.router.candidates import build_candidates
+from tokensfree.router.execute import NoProviderAvailable
+from tokensfree.sse import SseEncoder, ToolCallAssembler
+
+
+@dataclass(frozen=True)
+class StreamFailure:
+    status: int
+    body: dict
+
+
+@dataclass(frozen=True)
+class StreamPlan:
+    parsed: object
+    candidates: tuple
+    request_id: str
+
+
+def prepare_stream(payload, *, services, request_id, developer_role_policy="map"):
+    """Validate and select candidates. Returns StreamFailure or StreamPlan."""
+    try:
+        parsed = parse_chat_payload(payload, developer_role_policy=developer_role_policy)
+    except RequestRejected as rejected:
+        status, body = build_error(rejected.code, request_id)
+        return StreamFailure(status, body)
+    if not parsed.stream:
+        status, body = build_error(ErrorCode.invalid_request, request_id)
+        return StreamFailure(status, body)
+    if parsed.requires_tools and not any("tools" in spec.capabilities for spec in services.specs):
+        status, body = build_error(ErrorCode.unsupported_capability, request_id)
+        return StreamFailure(status, body)
+    configured = frozenset(spec.name for spec in services.specs)
+    candidates = []
+    for spec in build_candidates(services.specs, allowed=configured, required=parsed.capabilities):
+        adapter = services.adapters.get(spec.name)
+        if adapter is None or not hasattr(adapter, "stream"):
+            continue
+        candidates.append((spec, adapter))
+    if not candidates:
+        status, body = build_error(ErrorCode.unsupported_capability, request_id)
+        return StreamFailure(status, body)
+    return StreamPlan(parsed=parsed, candidates=tuple(candidates), request_id=request_id)
+
+
+async def iter_frames(plan, *, admit, max_attempts=2):
+    """Yield response bytes. Raises NormalizedError when no candidate produced a byte."""
+    trace = []
+    last_error = None
+    for spec, adapter in plan.candidates:
+        if len(trace) >= max_attempts:
+            break
+        try:
+            admission = admit(spec)
+        except AdmissionDenied as denied:
+            trace.append((spec.name, "denied:" + denied.reason))
+            continue
+        encoder = SseEncoder(model=spec.name, request_id=plan.request_id)
+        assembler = ToolCallAssembler()
+        emitted = False
+        first = True
+        try:
+            async for event in adapter.stream(plan.parsed.request, admission):
+                if event.kind == "delta":
+                    delta = dict(event.delta or {})
+                    tool_calls = delta.get("tool_calls")
+                    if tool_calls:
+                        assembler.add(tool_calls)
+                    if first:
+                        if "role" not in delta:
+                            yield encoder.chunk({"role": "assistant"})
+                        emitted = True
+                        first = False
+                    if delta:
+                        yield encoder.chunk(delta)
+                    continue
+                if event.kind == "finish":
+                    if first:
+                        yield encoder.chunk({"role": "assistant"})
+                        emitted = True
+                        first = False
+                    yield encoder.chunk({}, finish_reason=event.finish_reason or "stop")
+                    yield encoder.done()
+                    return
+        except NormalizedError as error:
+            if emitted:
+                yield encoder.error(error.code)
+                return
+            trace.append((spec.name, error.code))
+            last_error = error
+            if not error.retryable or len(trace) >= max_attempts:
+                raise
+            continue
+    if last_error is not None:
+        raise last_error
+    raise NoProviderAvailable(trace)
