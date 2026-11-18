@@ -77,7 +77,7 @@ def test_mock_runtime_serves_without_sockets():
 
 def test_evidence_expiry_fails_closed():
     clock = {"now": 100.0}
-    runtime = build_mock_runtime(clock=lambda: clock["now"])
+    runtime = build_mock_runtime(clock=lambda: clock["now"], ttl_s=60.0)
     assert call(runtime).status == 200
     clock["now"] = 1000.0  # evidence TTL was 60s
     outcome = call(runtime)
@@ -101,3 +101,14 @@ def test_runtime_dataclass_is_frozen():
     assert isinstance(runtime, Runtime)
     with pytest.raises(Exception):
         runtime.config = load_config({})
+
+
+
+def test_fixture_runtime_outlives_a_long_demo():
+    # A default fixture runtime is built once and serves for hours; it must not
+    # silently turn into 503 after the old 60s fixture TTL.
+    clock = {"now": 100.0}
+    runtime = build_mock_runtime(clock=lambda: clock["now"])
+    assert call(runtime).status == 200
+    clock["now"] = 100.0 + 7 * 24 * 3600
+    assert call(runtime).status == 200

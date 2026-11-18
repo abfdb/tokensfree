@@ -68,7 +68,7 @@ def test_same_key_different_payload_conflicts(store):
 
 def test_failure_is_cached_too(store):
     clock = {"now": 100.0}
-    runtime = build_mock_runtime(clock=lambda: clock["now"])
+    runtime = build_mock_runtime(clock=lambda: clock["now"], ttl_s=60.0)
     services = services_with(store, runtime, idempotency=IdempotencyRepo(store))
     clock["now"] = 10_000.0  # evidence expired
     first = call(services, key="kf")

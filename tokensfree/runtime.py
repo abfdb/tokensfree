@@ -14,6 +14,10 @@ from tokensfree.config import AppConfig, load_config
 from tokensfree.edge.app_core import Services
 from tokensfree.router.admission import admit
 
+# Fixture providers have no free-tier claim to verify; their evidence is only a
+# safety assertion, so it must outlive a long-running demo server.
+DEFAULT_FIXTURE_TTL_S = 10 ** 9
+
 
 @dataclass(frozen=True)
 class Runtime:
@@ -42,7 +46,7 @@ def build_services(*, config, specs, adapters, authorized, clock=time.time):
     )
 
 
-def build_loopback_runtime(port, *, config=None, clock=time.time, ttl_s=60.0):
+def build_loopback_runtime(port, *, config=None, clock=time.time, ttl_s=DEFAULT_FIXTURE_TTL_S):
     config = load_config({}) if config is None else config
     spec = ProviderSpec("loopback", "fixture-model", "mock_zero_cost", clock() + ttl_s)
     return Runtime(
@@ -57,7 +61,7 @@ def build_loopback_runtime(port, *, config=None, clock=time.time, ttl_s=60.0):
     )
 
 
-def build_mock_runtime(*, config=None, clock=time.time, ttl_s=60.0):
+def build_mock_runtime(*, config=None, clock=time.time, ttl_s=DEFAULT_FIXTURE_TTL_S):
     config = load_config({}) if config is None else config
     specs = (
         ProviderSpec("mock-alpha", "mock-a", "mock_zero_cost", clock() + ttl_s),
@@ -79,7 +83,7 @@ def build_mock_runtime(*, config=None, clock=time.time, ttl_s=60.0):
     )
 
 
-def build_loopback_streaming_runtime(port, *, config=None, clock=time.time, ttl_s=60.0, timeout=5.0, tools=False):
+def build_loopback_streaming_runtime(port, *, config=None, clock=time.time, ttl_s=DEFAULT_FIXTURE_TTL_S, timeout=5.0, tools=False):
     """Runtime whose single provider speaks SSE to a local fixture upstream."""
     config = load_config({}) if config is None else config
     capabilities = frozenset({"text", "stream"} | ({"tools"} if tools else set()))

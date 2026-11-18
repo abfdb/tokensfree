@@ -117,6 +117,7 @@ async def _execute(payload, *, services, request_id, developer_role_policy):
         request_id=request_id,
         model=execution.provider,
         content=execution.result.content,
+        finish_reason=getattr(execution.result, "finish_reason", None) or "stop",
         usage=usage,
         trace=execution.attempts,
     )

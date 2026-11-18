@@ -127,3 +127,50 @@ def test_assistant_content_null_with_tool_calls_is_accepted():
     assert parsed.request.messages[1]["content"] == ""
     assert parsed.request.messages[1]["tool_calls"][0]["id"] == "call_1"
     assert parsed.requires_tools is True
+
+
+
+def test_valid_assistant_tool_calls_are_accepted():
+    messages = [
+        {"role": "user", "content": "read it"},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "read", "arguments": "{}"}}],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "body"},
+    ]
+    parsed = parse_chat_payload(payload(messages=messages))
+    assert parsed.requires_tools is True
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        [{"id": "x", "type": "function"}],
+        [{"id": "", "type": "function", "function": {"name": "read", "arguments": ""}}],
+        [{"id": "x", "type": "function", "function": {"arguments": ""}}],
+        [{"id": "x", "type": "function", "function": {"name": "read", "arguments": 5}}],
+        ["not-a-dict"],
+    ],
+)
+def test_malformed_tool_calls_are_rejected(broken):
+    messages = [{"role": "assistant", "content": "", "tool_calls": broken}]
+    from tokensfree.edge.protocol import RequestRejected
+
+    with pytest.raises(RequestRejected):
+        parse_chat_payload(payload(messages=messages))
+
+
+@pytest.mark.parametrize("choice", ["auto", "none", "required", {"type": "function", "function": {"name": "read"}}])
+def test_supported_tool_choice_shapes_are_accepted(choice):
+    parsed = parse_chat_payload(payload(tool_choice=choice, tools=[{"type": "function", "function": {"name": "read"}}]))
+    assert parsed.request.tool_choice == choice
+
+
+@pytest.mark.parametrize("choice", ["sometimes", 3, {"type": "other"}, {"function": {"name": "read"}}, {"type": "function"}])
+def test_unsupported_tool_choice_shapes_are_rejected(choice):
+    from tokensfree.edge.protocol import RequestRejected
+
+    with pytest.raises(RequestRejected):
+        parse_chat_payload(payload(tool_choice=choice))

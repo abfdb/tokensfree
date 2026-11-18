@@ -84,8 +84,20 @@ def _parse_messages(messages, developer_role_policy, max_messages, max_content_c
             needs_tools = True
         tool_calls = message.get("tool_calls")
         if tool_calls is not None:
-            if role != "assistant" or not isinstance(tool_calls, list):
+            if role != "assistant" or not isinstance(tool_calls, list) or not tool_calls:
                 _reject()
+            for call in tool_calls:
+                if not isinstance(call, dict):
+                    _reject()
+                if not isinstance(call.get("id"), str) or not call["id"]:
+                    _reject()
+                function = call.get("function")
+                if not isinstance(function, dict):
+                    _reject()
+                if not isinstance(function.get("name"), str) or not function["name"]:
+                    _reject()
+                if not isinstance(function.get("arguments", ""), str):
+                    _reject()
             entry["tool_calls"] = tool_calls
             needs_tools = True
         normalized.append(entry)
@@ -115,8 +127,18 @@ def parse_chat_payload(payload, *, developer_role_policy="map", max_messages=32,
     else:
         tools = ()
     tool_choice = payload.get("tool_choice")
-    if tool_choice is not None and not isinstance(tool_choice, (str, dict)):
-        _reject()
+    if tool_choice is not None:
+        if isinstance(tool_choice, str):
+            if tool_choice not in ("none", "auto", "required"):
+                _reject()
+        elif isinstance(tool_choice, dict):
+            function = tool_choice.get("function")
+            if tool_choice.get("type") != "function" or not isinstance(function, dict):
+                _reject()
+            if not isinstance(function.get("name"), str) or not function["name"]:
+                _reject()
+        else:
+            _reject()
     requires_tools = bool(tools) or needs_tools_from_messages
     capabilities = {"text"}
     if requires_tools:

@@ -107,3 +107,36 @@ def test_all_denied_reports_no_free_provider_without_calls():
     assert outcome.body["error"]["code"] == "no_free_provider"
     assert outcome.body["tokensfree"]["attempts"] == [["alpha", "denied:not_authorized"]]
     assert adapter.calls == 0
+
+
+
+class LengthAdapter:
+    capabilities = frozenset({"text"})
+
+    async def complete(self, request, admission):
+        from tokensfree.adapters.base import ChatResult
+
+        return ChatResult(content="truncated", finish_reason="length")
+
+
+def test_finish_reason_is_forwarded_to_the_client():
+    spec = ProviderSpec("alpha", "mock-a", "mock_zero_cost", 200)
+    services = type("S", (), {})()
+    services.specs = (spec,)
+    services.adapters = {"alpha": LengthAdapter()}
+    services.authorized = frozenset({"alpha"})
+    services.admit = lambda candidate: admit_state(candidate)
+    services.idempotency = None
+    services.ledger = None
+    services.events = None
+    services.breakers = None
+
+    def admit_state(candidate):
+        from tokensfree.router.admission import admit as real_admit
+
+        return real_admit(candidate, load_config({}), frozenset({"alpha"}), 100)
+
+    outcome = asyncio.run(handle_chat({"model": "tokensfree-auto", "messages": [{"role": "user", "content": "hi"}]},
+                                      services=services, request_id="req-finish"))
+    assert outcome.status == 200
+    assert outcome.body["choices"][0]["finish_reason"] == "length"
