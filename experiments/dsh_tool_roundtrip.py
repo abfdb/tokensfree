@@ -2,7 +2,7 @@
 Usage: python experiments/dsh_tool_roundtrip.py /path/to/dsh/lib/bin.js
 No real API, credentials, existing DSH home, or existing workspace are used.
 """
-import sys,os,pathlib,json,subprocess,tempfile,threading
+import sys,pathlib,json,subprocess,tempfile,threading
 
 def main():
     if len(sys.argv)==2:

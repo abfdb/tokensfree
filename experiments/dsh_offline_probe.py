@@ -3,7 +3,7 @@ Install official @deepseek-ai/dsh@0.2.2-rc.1 separately with --ignore-scripts.
 Usage: python experiments/dsh_offline_probe.py /absolute/path/to/dsh/lib/bin.js
 Does not use existing DSH home, credentials, shell environment or workspace.
 """
-import os,sys,subprocess,tempfile,pathlib,json
+import sys,subprocess,tempfile,pathlib,json
 
 def main():
     if len(sys.argv) == 2:

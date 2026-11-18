@@ -54,15 +54,18 @@ print(json.load(urllib.request.urlopen(req)))
 ## 验证
 
 ```sh
-python -m unittest -v
+python -m pip install -r requirements-dev.txt
+python -m ruff check .
+python -m pytest -q          # 119 项，Windows/macOS/Linux 三平台一致
+python check_dsh_contract.py # 8 项契约矩阵，退出 0 表示拒绝行为符合预期
 ```
 
-上一阶段 43 项单元/HTTP 测试通过（路由、耗尽、拒绝、冷却、验证、并发、Host/Origin、访问令牌、静态路由和路径限制）。JS 通过 `node --check static/app.js`。云端 Chrome 实测了备用成功与全部耗尽停止，查看桌面布局。未完成 Windows、手机、第三方客户端与真实平台测试。导入导出保留旧原型实现，未在本轮重新做浏览器全链路测试。
+窗口环境为 Python 3.10+。当前阶段：P0 工程基线（设计见 [docs/superpowers/specs/](docs/superpowers/specs/)，计划见 [docs/superpowers/plans/](docs/superpowers/plans/)）。JS 通过 `node --check static/app.js`。真实供应商接入、SSE 与工具调用仍未实现。
 
 ## 项目结构
 `server.py` 路由与本地服务；`test_gateway.py` 自动测试；`static/` 极客控制台；`static/catalog/` 资源目录。运行状态不会写入源码。`package.json` 仅供开发预览，无 npm 依赖。
 
-开源许可证尚待决定。当前无 LICENSE，不应声称已作为开源项目发布。
+许可证：Apache-2.0（见仓库根目录 `LICENSE`）。本项目为本地原型，仍不应声称已具备生产可用性。
 
 
 ## 0.2.1：重复请求保护

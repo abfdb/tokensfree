@@ -1,5 +1,4 @@
 """Adversarial loopback HTTP fixtures only: no external calls or real secrets."""
-import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import threading

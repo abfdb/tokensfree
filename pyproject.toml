@@ -1,0 +1,21 @@
+[project]
+name = "tokensfree"
+version = "0.6.0"
+description = "Local-first free-tier model routing lab"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+python_files = ["test_*.py"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 160
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F"]
+# P0 不重排既有代码：E401/E501/E701/E702 是项目刻意的紧凑写法，全部豁免。
+# 保留 pyflakes(F) 与语法错误(E9) 作为真实门禁。
+ignore = ["E401", "E501", "E701", "E702"]
