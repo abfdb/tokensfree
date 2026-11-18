@@ -4,6 +4,7 @@ from collections import OrderedDict
 from pathlib import Path
 from providers import ProviderSpec, MockAdapter, evaluate
 from tokensfree.errors import ErrorCode, http_error
+from tokensfree import obs
 from agent_fixture import Roundtrip, SENTINEL, sse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -128,6 +129,11 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args): pass # Do not log request bodies or local access token.
     def send(self, code, body, mime='application/json; charset=utf-8'):
         raw = json.dumps(body, ensure_ascii=False).encode() if mime.startswith('application/json') else body
+        rid = getattr(self, '_rid', None)
+        if rid:
+            record = {'request_id':rid, 'outcome':'ok' if code < 300 else 'error', 'bytes_out':len(raw)}
+            if isinstance(body, dict) and isinstance(body.get('error'), dict): record['error_code'] = body['error'].get('code')
+            obs.log_event('request.end', **record)
         self.send_response(code); self.send_header('Content-Type',mime); self.send_header('Content-Length',str(len(raw)))
         self.send_header('Cache-Control','no-store'); self.send_header('X-Content-Type-Options','nosniff')
         self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'")
@@ -160,6 +166,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send(200,(ROOT/file).read_bytes(),mime)
     def do_POST(self):
         rid = 'req-' + uuid.uuid4().hex
+        self._rid = rid
+        obs.log_event('request.start', request_id=rid)
         if not self.allowed(): return self.send(*http_error(ErrorCode.origin_rejected, rid))
         token = self.headers.get('Authorization','').encode('utf-8')
         if not secrets.compare_digest(token,('Bearer '+self.server.token).encode('utf-8')): return self.send(*http_error(ErrorCode.unauthorized, rid))
