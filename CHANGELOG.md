@@ -25,7 +25,7 @@
 - 账号作用域失败（额度耗尽 / 鉴权失败 / 限流）会更新账号状态（platform_signal、invalid、cooldown）并自动回退到下一个 key；内容级失败（refusal 等）仍然立即终止
 - 账号状态参与路由：exhausted / invalid / 冷却中的 key 在准入阶段被跳过（`/api/status` 可见 `account_*` 原因）
 - 替换 key 自动恢复账号：指纹变化时重置为 active 并清除冷却；同一 key 重启不会重置状态
-- 运维工具：`/api/status` 增加账号摘要（状态/冷却/已计费请求数），`scripts/accounts_admin.py` 支持列出、激活、清除冷却
+- 运维工具：`/api/status` 增加账号摘要（状态/冷却/已计费请求数）与每个 provider 的模型/仿真标记/证据到期时间，`scripts/accounts_admin.py` 支持列出、激活、清除冷却
 - SQLite 持久化：迁移、幂等键、只增账本、事件（`store/`），并接入可运行服务（`--db`，默认进程内）
 
 **边缘与协议**

@@ -122,4 +122,7 @@ def test_status_reports_the_account_block_reason(storage):
     )
     payload = json.loads(response.body)
     alpha = next(provider for provider in payload["providers"] if provider["name"] == "alpha")
-    assert alpha == {"name": "alpha", "state": "blocked", "policy_reason": "account_exhausted"}
+    assert alpha["state"] == "blocked"
+    assert alpha["policy_reason"] == "account_exhausted"
+    assert alpha["model"] == "m-a"
+    assert alpha["simulation"] is True

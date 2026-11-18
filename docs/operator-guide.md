@@ -82,7 +82,9 @@ $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
  "persistence": {"idempotency": true, "ledger": true, "events": true},
  "accounts": [{"provider": "zhipu", "status": "active", "cooldown_until": null, "requests_charged": 12}],
  "breakers": {"provider-a": {"state": "open", "fail_streak": 3, "window_fails": 3, "open_until": 1700000000.0}},
- "providers": [{"name": "mock-alpha", "state": "eligible", "policy_reason": "admitted"}]}
+ "providers": [{"name": "mock-alpha", "model": "mock-a", "simulation": true,
+                "state": "eligible", "policy_reason": "admitted",
+                "evidence_expires_at": 1797593938.0}]}
 ```
 
 `simulation` 为 false 表示配置了真实 provider（是否可调用仍由三条件闸门决定）；`breakers` 为空表示没有配置熔断器。

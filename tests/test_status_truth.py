@@ -107,3 +107,12 @@ def test_status_reports_version_and_uptime():
     assert payload["version"] == __version__
     assert isinstance(payload["uptime_s"], (int, float))
     assert payload["uptime_s"] >= 0
+
+
+
+def test_providers_expose_model_and_evidence_expiry():
+    payload = status_of(backend_for(MOCK, CONFIG_OFF))
+    entry = payload["providers"][0]
+    assert entry["model"] == "mock-a"
+    assert entry["simulation"] is True
+    assert entry["evidence_expires_at"] == 1_000_000

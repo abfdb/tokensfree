@@ -80,7 +80,16 @@ class MemoryBackend:
                 state, reason = "eligible", "admitted"
             except Exception as denied:  # admission denials carry a stable reason string
                 state, reason = "blocked", getattr(denied, "reason", "denied")
-            providers.append({"name": spec.name, "state": state, "policy_reason": reason})
+            providers.append(
+                {
+                    "name": spec.name,
+                    "model": spec.model,
+                    "simulation": bool(getattr(spec, "simulation", True)),
+                    "state": state,
+                    "policy_reason": reason,
+                    "evidence_expires_at": spec.evidence_expires_at,
+                }
+            )
         # Never claim simulation when a real provider is configured: after the gate opens
         # this field must tell the truth.
         simulation = all(getattr(spec, "simulation", True) for spec in self.services.specs)
