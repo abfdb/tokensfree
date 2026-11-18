@@ -134,7 +134,9 @@ python check_dsh_contract.py # 8 组拒绝行为矩阵，退出 0 表示符合�
 - `scripts/verify_p0.py` → P0 OK（ruff / pytest / 契约矩阵 / 导入出口门禁 / **真实进程用户旅程** / 密钥扫描）
 - 干净克隆 → venv → 安装依赖 → `verify_p0.py` → P0 OK（可复现）
 - 真实 DSH 0.2.2-rc.1 headless + 合成上游：流式、23 个工具透传、`read` 工具往返、最终文本、退出码 0 全部通过（`scripts/dsh_smoke.py`）
-- P0–P3 内核与审计修复共 379 项测试通过（1 项 opt-in DSH 用例默认跳过）
+- P0–P4 内核、真实调用闸门、真实供应商装配与审计修复共 441 项测试通过（2 项 opt-in 用例默认跳过）
+- 用户旅程脚本（真实起服务、幂等、跨重启重放）已作为 `verify_p0` 的一部分
+- 真实供应商验收：`scripts/real_smoke.py --fixture` 自检通过（本地假上游，无需 key、不联网）
 
 设计见 [docs/superpowers/specs/](docs/superpowers/specs/)，计划见 [docs/superpowers/plans/](docs/superpowers/plans/)（P0、P1、P2）。JS 通过 `node --check static/app.js`。旧 `server.py` 是冻结的 mock 参考实现；新内核通过 `tokensfree.edge.host` 或任意 ASGI 服务器提供 HTTP 服务，两者用契约测试对照。
 
