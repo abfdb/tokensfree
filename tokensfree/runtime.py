@@ -29,6 +29,7 @@ REAL_ENV_KEYS = (
     "TOKENSFREE_REAL_MODEL",
     "TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT",
 )
+MAX_REAL_KEYS = 8
 REAL_DEFAULT_CAPABILITIES = frozenset({"text", "stream", "tools"})
 
 
@@ -157,15 +158,38 @@ def build_loopback_streaming_runtime(port, *, config=None, clock=time.time, ttl_
     )
 
 
-def real_spec_from_env(env, *, clock=time.time):
-    """Build the real ProviderSpec from an explicit environment mapping.
+def real_keys_from_env(env):
+    """One key or a comma/whitespace separated key list (up to MAX_REAL_KEYS)."""
+    single = str(env.get("TOKENSFREE_REAL_API_KEY", "")).strip()
+    multiple = str(env.get("TOKENSFREE_REAL_API_KEYS", "")).strip()
+    if single and multiple:
+        raise ValueError("set only one of TOKENSFREE_REAL_API_KEY and TOKENSFREE_REAL_API_KEYS")
+    raw = multiple if multiple else single
+    if not raw:
+        raise ValueError("missing real-provider environment: TOKENSFREE_REAL_API_KEY")
+    keys = [part.strip() for part in raw.replace(",", " ").split() if part.strip()]
+    if not 1 <= len(keys) <= MAX_REAL_KEYS:
+        raise ValueError("TOKENSFREE_REAL_API_KEYS must contain 1..%d keys" % MAX_REAL_KEYS)
+    if any(len(key) > 512 for key in keys):
+        raise ValueError("an API key is longer than 512 characters")
+    return tuple(keys)
 
-    Fails closed with the exact missing/invalid variable names. The API key is
-    never returned in error messages.
-    """
-    missing = [key for key in REAL_ENV_KEYS if not str(env.get(key, "")).strip()]
-    if missing:
-        raise ValueError("missing real-provider environment: " + ", ".join(missing))
+
+def real_specs_from_env(env, *, clock=time.time):
+    """One ProviderSpec per key; extra keys become provider-2, provider-3, ..."""
+    base_missing = [
+        key for key in REAL_ENV_KEYS if key != "TOKENSFREE_REAL_API_KEY" and not str(env.get(key, "")).strip()
+    ]
+    keys_missing = not (
+        str(env.get("TOKENSFREE_REAL_API_KEY", "")).strip()
+        or str(env.get("TOKENSFREE_REAL_API_KEYS", "")).strip()
+    )
+    if base_missing or keys_missing:
+        names = list(base_missing)
+        if keys_missing:
+            names.append("TOKENSFREE_REAL_API_KEY (or TOKENSFREE_REAL_API_KEYS)")
+        raise ValueError("missing real-provider environment: " + ", ".join(names))
+    keys = real_keys_from_env(env)
     provider = str(env["TOKENSFREE_REAL_PROVIDER"]).strip()
     model = str(env["TOKENSFREE_REAL_MODEL"]).strip()
     if not provider or not model:
@@ -176,15 +200,24 @@ def real_spec_from_env(env, *, clock=time.time):
         raise ValueError("TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT must be a unix timestamp") from None
     now = clock()
     if expires_at <= now:
-        raise ValueError("TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT is in the past; refresh the free-tier evidence first")
-    return ProviderSpec(
-        provider,
-        model,
-        "free_verified",
-        expires_at,
-        REAL_DEFAULT_CAPABILITIES,
-        simulation=False,
-    )
+        raise ValueError("TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT is in the past; refresh the free-tier evidence")
+    specs = []
+    for index, key in enumerate(keys):
+        name = provider if index == 0 else "%s-%d" % (provider, index + 1)
+        specs.append(
+            ProviderSpec(name, model, "free_verified", expires_at, REAL_DEFAULT_CAPABILITIES, simulation=False)
+        )
+    return tuple(specs), keys
+
+
+def real_spec_from_env(env, *, clock=time.time):
+    """Build the real ProviderSpec from an explicit environment mapping.
+
+    Fails closed with the exact missing/invalid variable names. The API key is
+    never returned in error messages.
+    """
+    specs, _keys = real_specs_from_env(env, clock=clock)
+    return specs[0]
 
 
 def build_real_runtime(*, config, env, clock=time.time, storage=None, timeout=15.0, max_stream_s=120.0):
@@ -193,21 +226,25 @@ def build_real_runtime(*, config, env, clock=time.time, storage=None, timeout=15
     Building it does not mean calling it: admission still requires
     TOKENSFREE_ENABLE_REAL=1 plus valid evidence.
     """
-    spec = real_spec_from_env(env, clock=clock)
-    adapter = OpenAICompatAdapter(
-        str(env["TOKENSFREE_REAL_BASE_URL"]).strip(),
-        str(env["TOKENSFREE_REAL_API_KEY"]).strip(),
-        timeout=timeout,
-        max_stream_s=max_stream_s,
-        allow_remote=True,
-    )
+    specs, keys = real_specs_from_env(env, clock=clock)
+    base_url = str(env["TOKENSFREE_REAL_BASE_URL"]).strip()
+    adapters = {
+        spec.name: OpenAICompatAdapter(
+            base_url,
+            key,
+            timeout=timeout,
+            max_stream_s=max_stream_s,
+            allow_remote=True,
+        )
+        for spec, key in zip(specs, keys)
+    }
     return Runtime(
         config=config,
         services=build_services(
             config=config,
-            specs=(spec,),
-            adapters={spec.name: adapter},
-            authorized=frozenset({spec.name}),
+            specs=specs,
+            adapters=adapters,
+            authorized=frozenset(spec.name for spec in specs),
             clock=clock,
             storage=storage,
         ),

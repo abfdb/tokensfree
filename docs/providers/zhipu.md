@@ -49,6 +49,8 @@ python -m tokensfree --port 8766 --real --db .\tokensfree.db
 python scripts/real_smoke.py       # 真实验收（启动网关 + 真实 DSH）
 ```
 
+多个免费额度的账号可以用 `TOKENSFREE_REAL_API_KEYS=key1,key2`（最多 8 个）同时接入：每个 key 是一个候选 provider，遇到可重试限流（1302/1305）会自动切到下一个 key。
+
 免费证据建议每 30 天复核一次定价页后更新 `TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT`，并把 URL 与抓取时间记入 `.superpowers/` 下的进度账本（不进 Git 的内容）。
 
 ## 待办（拿到 Key 后）
