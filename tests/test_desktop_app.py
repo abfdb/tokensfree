@@ -50,7 +50,7 @@ def make_app(tmp_path):
     except tk.TclError as error:
         pytest.skip("no display for tkinter: %s" % error)
     config = desktop_config.DesktopConfig(port=9999, token="T" * 32, db_path=str(tmp_path / "state.db"))
-    app = DesktopApp(root, config=config, controller=FakeController())
+    app = DesktopApp(root, config=config, controller=FakeController(), tray=False)
     root.withdraw()
     return root, app
 
@@ -107,3 +107,65 @@ def test_self_check_starts_a_gateway_and_reports(tmp_path):
     assert payload["port"] > 0
     assert payload["console_url"].startswith("http://127.0.0.1:")
     assert payload["providers"] == ["mock-alpha", "mock-beta"]
+
+
+class FakeTray:
+    def __init__(self):
+        self.stopped = False
+
+    def stop(self):
+        self.stopped = True
+
+
+def test_close_hides_to_the_tray_instead_of_exiting(tmp_path):
+    import tkinter as tk
+
+    try:
+        root = tk.Tk()
+    except tk.TclError as error:
+        pytest.skip("no display for tkinter: %s" % error)
+    fake_tray = FakeTray()
+    fake_controller = FakeController()
+    config = desktop_config.DesktopConfig(port=9999, token="T" * 32, db_path=str(tmp_path / "state.db"))
+    app = DesktopApp(root, config=config, controller=fake_controller, tray=fake_tray)
+    try:
+        root.update()
+        app.on_close()
+        assert root.winfo_exists()
+        assert root.state() == "withdrawn"
+        assert fake_tray.stopped is False
+        app._tray_events.put("show")
+        app._apply_tray_events()
+        assert root.state() == "normal"
+        app._tray_events.put("exit")
+        app._apply_tray_events()
+        assert fake_tray.stopped is True
+        assert fake_controller.stopped is True
+        with pytest.raises(tk.TclError):
+            root.winfo_exists()
+    finally:
+        try:
+            root.destroy()
+        except tk.TclError:
+            pass
+
+
+def test_tray_console_command_without_a_port_is_a_noop(tmp_path):
+    import tkinter as tk
+
+    try:
+        root = tk.Tk()
+    except tk.TclError as error:
+        pytest.skip("no display for tkinter: %s" % error)
+    fake_controller = FakeController()
+    fake_controller.console_url = lambda: None
+    config = desktop_config.DesktopConfig(port=9999, token="T" * 32, db_path=str(tmp_path / "state.db"))
+    app = DesktopApp(root, config=config, controller=fake_controller, tray=FakeTray())
+    try:
+        app._tray_events.put("console")
+        app._apply_tray_events()
+    finally:
+        try:
+            root.destroy()
+        except tk.TclError:
+            pass

@@ -33,6 +33,18 @@ $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
 .venv\Scripts\python -m tokensfree --port 8766 --db .\tokensfree.db
 ~~~
 
+### Windows 桌面外壳
+
+~~~powershell
+.venv\Scripts\python -m tokensfree.desktop            # 控制面板（托盘 + 开机启动可勾选）
+.venv\Scripts\python -m tokensfree.desktop --self-check  # 自检：起网关→校验→构造窗口→退出
+powershell -ExecutionPolicy Bypass -File install\install.ps1            # 安装快捷方式（用户级，无管理员）
+powershell -ExecutionPolicy Bypass -File install\install.ps1 -Autostart # 同时开机启动
+powershell -ExecutionPolicy Bypass -File install\uninstall.ps1 -RemoveData
+~~~
+
+桌面面板：模式/端口/数据库设置、启动/停止网关、打开网页控制台、providers/账号/熔断状态、日志尾部；关闭窗口默认最小化到系统托盘（托盘菜单：显示面板 / 打开控制台 / 启停网关 / 退出）。配置在 `%APPDATA%\tokensfree\desktop.json`，只保存本地网关令牌，不保存供应商 key。
+
 浏览器打开 `http://127.0.0.1:8766/` 使用**网页控制台**：选择模型、流式对话、查看 providers/账号/熔断状态、复制 Base URL 与本地令牌。
 
 端点：`GET /v1/models`、`POST /v1/chat/completions`（非流式）、`GET /api/status`、`GET /api/session`（控制台获取本地令牌；仅 loopback + Host 校验，等价于旧控制台的 session 端点）。

@@ -17,12 +17,14 @@ STATUS_MS = 5000
 
 
 class DesktopApp:
-    def __init__(self, root, *, config, controller=None):
+    def __init__(self, root, *, config, controller=None, tray=None):
         self.root = root
         self.config = config
         self.controller = controller or GatewayController(config)
         self._busy = False
         self._events = queue.Queue()
+        self._tray_events = queue.Queue()
+        self.tray = None if tray is False else (tray if tray is not None else self._create_tray())
         self.root.title("tokensfree 控制台")
         self.root.geometry("880x640")
         self.root.minsize(760, 560)
@@ -106,6 +108,21 @@ class DesktopApp:
         self.loopback_var.set(str(self.config.loopback_port))
         self.db_var.set(self.config.db_path)
         self.autostart_var.set(startup.is_autostart_enabled())
+
+    def _create_tray(self):
+        if not self.config.minimize_to_tray:
+            return None
+        try:
+            from tokensfree.desktop.tray import IS_WINDOWS, TrayIcon
+        except ImportError:
+            return None
+        if not IS_WINDOWS:
+            return None
+        icon = TrayIcon(on_command=lambda command: self._tray_events.put(command))
+        if icon.start():
+            return icon
+        self.hint_var.set("系统托盘不可用：%s（关闭窗口将直接退出）" % (icon.error or "unknown"))
+        return None
 
     def _current_config(self):
         try:
@@ -235,6 +252,7 @@ class DesktopApp:
 
     def _poll(self):
         try:
+            self._apply_tray_events()
             self._apply_events()
             self._refresh_logs()
             if self.controller.running:
@@ -273,11 +291,40 @@ class DesktopApp:
         for name, breaker in (status.get("breakers") or {}).items():
             self.tree.insert("", "end", values=("breaker", name, breaker.get("state", "unknown")))
 
-    def on_close(self):
+    def _apply_tray_events(self):
+        while True:
+            try:
+                command = self._tray_events.get_nowait()
+            except queue.Empty:
+                return
+            if command == "show":
+                self.root.deiconify()
+                self.root.lift()
+            elif command == "console":
+                self.open_console()
+            elif command == "toggle-gateway":
+                if self.controller.running:
+                    self.stop_gateway()
+                else:
+                    self.start_gateway()
+            elif command == "exit":
+                self.exit_application()
+
+    def exit_application(self):
         try:
+            if self.tray is not None:
+                self.tray.stop()
+                self.tray = None
             self.controller.stop()
         finally:
             self.root.destroy()
+
+    def on_close(self):
+        if self.tray is not None:
+            self.root.withdraw()
+            self.hint_var.set("已最小化到系统托盘；托盘菜单可退出")
+            return
+        self.exit_application()
 
 
 def run_self_check():
@@ -309,8 +356,10 @@ def run_self_check():
         try:
             root = tk.Tk()
             root.withdraw()
-            DesktopApp(root, config=config, controller=controller)
+            app = DesktopApp(root, config=config, controller=controller)
             root.update()
+            if app.tray is not None:
+                app.tray.stop()
             root.destroy()
             report["ui"] = True
         except tk.TclError as error:

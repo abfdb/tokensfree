@@ -78,6 +78,8 @@ $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
 .venv\Scripts\python -m tokensfree.edge.host --port 8766
 ```
 
+Windows 用户还可以用**桌面外壳**：`python -m tokensfree.desktop`（tkinter 控制面板 + 托盘 + 开机启动，安装用 `install\install.ps1`）。
+
 启动后浏览器打开 `http://127.0.0.1:8766/` 就是**网页控制台**（模型选择、流式对话、运行时状态、连接信息复制）。
 
 端点：`GET /v1/models`、`POST /v1/chat/completions`（非流式）、`GET /api/status`、`GET /api/session`（浏览器控制台用本地令牌）。Host/Origin/令牌校验与旧实现共用同一套函数。
