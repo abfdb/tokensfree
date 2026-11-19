@@ -38,6 +38,7 @@ TOKENSFREE_LOCAL_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(
 | 网页控制台 | Windows 桌面面板 |
 |---|---|
 | ![网页控制台](docs/images/web-console.png) | ![桌面面板](docs/images/desktop-panel.png) |
+| ![网页端接入通道管理](docs/images/web-channels.png) | 在网页端增删改自定义通道（`--profiles` 启动后可用） |
 
 网页控制台：对话/流式、模型与通道状态、连接信息、接入通道管理（`--profiles` 启动后可用）。
 桌面面板：启停网关、打开网页控制台、模式/端口/数据库设置、运行状态与日志、接入通道页与系统托盘。

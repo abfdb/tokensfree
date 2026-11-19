@@ -113,6 +113,8 @@ $env:TOKENSFREE_REAL_EVIDENCE_SNAPSHOT = "D:\IFan\tokensfree\.superpowers\eviden
 
 启动前可自检：`.venv\Scripts\python -m tokensfree --check [--real]`——只校验配置（key 来源、证据、db），输出 JSON，**不绑定端口、不发起请求**。
 
+![网页端接入通道管理](images/web-channels.png)
+
 ### 自定义接入通道
 
 把任意 OpenAI 兼容 endpoint（本机 Ollama / LM Studio / vLLM、远端 HTTPS）接入网关。桌面面板的 **"接入通道"** 页可视化增删改/测试连接；也可直接编辑 `%APPDATA%\tokensfree\providers.json`。

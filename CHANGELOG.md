@@ -6,6 +6,7 @@
 ## 未发布
 
 - 稳定性：新增 onboarding 脚本回归测试（PowerShell 语法、UTF-8 BOM、quickstart 生成 .env、start.ps1 参数），CI 支持手动触发并限制超时
+- 文档：补充网页端"接入通道"管理截图（docs/images/web-channels.png），README 与操作手册可直接查看
 - 开源仓库友好度：新增 CONTRIBUTING.md、docs/README.md 索引、Issue/PR 模板；README 增加网页控制台与桌面面板截图（docs/images/）
 - 易上手优化：新增 `scripts/quickstart.ps1`（创建 .venv、生成本地令牌 .env、启动）、`scripts/start.ps1`、`.env.example`；主程序新增 `--env-file`（仅接受 `TOKENSFREE_*`，真实环境变量优先，兼容 BOM）；README 重写为快速开始优先
 
