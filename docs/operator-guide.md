@@ -1,4 +1,6 @@
-# tokensfree 操作手册（一页纸）
+# tokensfree 操作手册
+
+> 首次使用推荐 `scripts/quickstart.ps1`（Windows）或按 README 手动启动；本文是完整参数与运维参考。（一页纸）
 
 > 适用版本：仓库 HEAD（P0–P4 已落地；真实供应商已用智谱 `glm-4.7-flash` 完成联调）。本文只写**现在能运行什么、怎么验收、出错怎么查**。
 

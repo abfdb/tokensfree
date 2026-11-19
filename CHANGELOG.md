@@ -3,6 +3,10 @@
 本文件记录 tokensfree 从"本地 mock 原型"演进为"可被真实客户端驱动、默认零外发的本地网关"的过程。
 详细设计与验收标准见 [设计文档](docs/superpowers/specs/2026-11-18-tokensfree-productionization-design.md) 与 [操作手册](docs/operator-guide.md)。
 
+## 未发布
+
+- 易上手优化：新增 `scripts/quickstart.ps1`（创建 .venv、生成本地令牌 .env、启动）、`scripts/start.ps1`、`.env.example`；主程序新增 `--env-file`（仅接受 `TOKENSFREE_*`，真实环境变量优先，兼容 BOM）；README 重写为快速开始优先
+
 ## v0.6.0（未发布，分支 p0-engineering-baseline）
 
 ### 新增

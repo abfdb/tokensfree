@@ -227,6 +227,7 @@ def main():
 
     from tokensfree import __version__
     from tokensfree.config import load_config
+    from tokensfree.envfile import apply_env_file
     from tokensfree.edge.asgi import make_asgi_app
     from tokensfree.edge.backend import MemoryBackend
     from tokensfree.profiles import load_profiles
@@ -251,7 +252,14 @@ def main():
                         help="validate the configuration (key, evidence, db) and exit without binding a port")
     parser.add_argument("--profiles", default=None,
                         help="JSON file with user-defined OpenAI-compatible provider profiles")
+    parser.add_argument("--env-file", default=None,
+                        help="read TOKENSFREE_* variables from a KEY=VALUE file (real env wins)")
     args = parser.parse_args()
+    if args.env_file:
+        try:
+            apply_env_file(args.env_file)
+        except (OSError, ValueError) as error:
+            raise SystemExit("cannot read env file %r: %s" % (args.env_file, error)) from None
     config = load_config(os.environ)
     if config.local_token is None:
         raise SystemExit("TOKENSFREE_LOCAL_TOKEN must be set for the new backend")
