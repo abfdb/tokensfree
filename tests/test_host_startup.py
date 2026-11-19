@@ -82,3 +82,36 @@ def test_port_zero_announces_the_real_port():
         except subprocess.TimeoutExpired:
             process.kill()
             process.communicate()
+
+
+def test_port_in_use_fails_with_a_clean_message(tmp_path):
+    import socket
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen(1)
+        port = sock.getsockname()[1]
+        env = {
+            "TOKENSFREE_LOCAL_TOKEN": "H" * 32,
+            "PYTHONIOENCODING": "utf-8",
+            "PATH": __import__("os").environ.get("PATH", ""),
+            "SYSTEMROOT": __import__("os").environ.get("SystemRoot", ""),
+        }
+        result = subprocess.run(
+            [sys.executable, "-m", "tokensfree", "--port", str(port), "--db", str(tmp_path / "state.db")],
+            cwd=str(root),
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+        )
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "cannot bind 127.0.0.1:%d" % port in combined
+    assert "Traceback" not in combined
