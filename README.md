@@ -33,6 +33,14 @@ TOKENSFREE_LOCAL_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(
 > 本地令牌是**访问本机网关的凭证**（不是任何供应商的 API Key），长度 32–128，字符集 `[A-Za-z0-9_-]`。
 > 支持 `--env-file .env` 读取 `TOKENSFREE_*` 变量；真实环境变量优先。
 
+## 界面预览
+
+| 网页控制台 | Windows 桌面面板 |
+|---|---|
+| ![网页控制台](docs/images/web-console.png) | ![桌面面板](docs/images/desktop-panel.png) |
+
+网页控制台：对话/流式、模型与通道状态、连接信息、接入通道管理（`--profiles` 启动后可用）。
+桌面面板：启停网关、打开网页控制台、模式/端口/数据库设置、运行状态与日志、接入通道页与系统托盘。
 ## 能做什么
 
 | 能力 | 入口 |
