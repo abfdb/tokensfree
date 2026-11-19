@@ -22,6 +22,7 @@ class AppConfig:
     port: int = DEFAULT_PORT
     local_token: str | None = None
     enable_real: bool = False
+    allow_user_paid: bool = False
     max_body_bytes: int = DEFAULT_MAX_BODY_BYTES
     default_timeout_s: float = DEFAULT_TIMEOUT_S
 
@@ -64,6 +65,14 @@ def load_config(env: Mapping[str, str]) -> AppConfig:
     else:
         raise ValueError("TOKENSFREE_ENABLE_REAL must be 0 or 1")
 
+    raw_paid = env.get("TOKENSFREE_ALLOW_USER_PAID")
+    if raw_paid is None:
+        allow_user_paid = False
+    elif raw_paid in (_TRUE, _FALSE):
+        allow_user_paid = raw_paid == _TRUE
+    else:
+        raise ValueError("TOKENSFREE_ALLOW_USER_PAID must be 0 or 1")
+
     token = env.get("TOKENSFREE_LOCAL_TOKEN")
     if token is not None:
         if not isinstance(token, str) or not _TOKEN_RE.fullmatch(token):
@@ -73,6 +82,7 @@ def load_config(env: Mapping[str, str]) -> AppConfig:
         port=_parse_int(env, "TOKENSFREE_PORT", DEFAULT_PORT, 1, 65535),
         local_token=token,
         enable_real=enable_real,
+        allow_user_paid=allow_user_paid,
         max_body_bytes=_parse_int(env, "TOKENSFREE_MAX_BODY_BYTES", DEFAULT_MAX_BODY_BYTES, 1024, 1048576),
         default_timeout_s=_parse_float(env, "TOKENSFREE_TIMEOUT_S", DEFAULT_TIMEOUT_S, 1.0, 600.0),
     )

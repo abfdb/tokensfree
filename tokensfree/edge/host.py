@@ -229,7 +229,14 @@ def main():
     from tokensfree.config import load_config
     from tokensfree.edge.asgi import make_asgi_app
     from tokensfree.edge.backend import MemoryBackend
-    from tokensfree.runtime import Storage, build_loopback_streaming_runtime, build_mock_runtime, build_real_runtime
+    from tokensfree.profiles import load_profiles
+    from tokensfree.runtime import (
+        Storage,
+        build_loopback_streaming_runtime,
+        build_mock_runtime,
+        build_profiles_runtime,
+        build_real_runtime,
+    )
 
     parser = argparse.ArgumentParser(description="Serve the tokensfree ASGI app on loopback")
     parser.add_argument("--version", action="version", version="tokensfree " + __version__)
@@ -242,6 +249,8 @@ def main():
                         help="use one real OpenAI-compatible provider configured by TOKENSFREE_REAL_* (still gated)")
     parser.add_argument("--check", action="store_true",
                         help="validate the configuration (key, evidence, db) and exit without binding a port")
+    parser.add_argument("--profiles", default=None,
+                        help="JSON file with user-defined OpenAI-compatible provider profiles")
     args = parser.parse_args()
     config = load_config(os.environ)
     if config.local_token is None:
@@ -252,7 +261,35 @@ def main():
         raise SystemExit("cannot open db %r: %s" % (args.db, error)) from None
     if args.real and args.loopback is not None:
         raise SystemExit("--real and --loopback are mutually exclusive")
-    if args.real:
+    if args.profiles is not None and (args.real or args.loopback is not None):
+        raise SystemExit("--profiles cannot be combined with --real or --loopback")
+    if args.profiles is not None:
+        try:
+            profiles = load_profiles(args.profiles)
+            runtime = build_profiles_runtime(profiles, config=config, storage=storage)
+        except ValueError as error:
+            if args.check:
+                storage.close()
+                print(json.dumps({"ok": False, "mode": "profiles", "error": str(error)}, ensure_ascii=False, indent=2))
+                return 2
+            raise SystemExit(str(error)) from None
+        enabled = sum(1 for profile in profiles if profile.enabled)
+        mode = "provider profiles: %d channel(s), enable_real=%s" % (enabled, config.enable_real)
+        if args.check:
+            providers = [
+                {
+                    "name": profile.id,
+                    "model": profile.model,
+                    "cost_policy": profile.cost_policy,
+                    "base_url": profile.base_url,
+                    "enabled": profile.enabled,
+                }
+                for profile in profiles
+            ]
+            print(json.dumps({"ok": True, "mode": mode, "profiles": providers}, ensure_ascii=False, indent=2))
+            storage.close()
+            return 0
+    elif args.real:
         try:
             runtime = build_real_runtime(config=config, env=os.environ, storage=storage)
         except ValueError as error:

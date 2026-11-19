@@ -10,12 +10,14 @@ import time
 from dataclasses import dataclass
 
 from providers import ProviderSpec
+from tokensfree.adapters.base import Admission, _ADMISSION_TOKEN
 from tokensfree.adapters.loopback import LoopbackAdapter
 from tokensfree.adapters.openai_compat import OpenAICompatAdapter
 from tokensfree.adapters.transport import LoopbackStreamingAdapter
 from tokensfree.adapters.mock import MockChatAdapter
 from tokensfree.config import AppConfig, load_config
 from tokensfree.edge.app_core import Services
+from tokensfree import profiles as provider_profiles
 from tokensfree.router.admission import AdmissionDenied, admit
 from tokensfree.router.health import CircuitBreaker
 from tokensfree.router.scheduling import RoundRobin
@@ -84,7 +86,7 @@ class Runtime:
     storage: object = None
 
 
-def build_services(*, config, specs, adapters, authorized, clock=time.time, storage=None, breakers=None, rotation=None, account_ids=None, accounts=None):
+def build_services(*, config, specs, adapters, authorized, clock=time.time, storage=None, breakers=None, rotation=None, account_ids=None, accounts=None, gate=None):
     specs = tuple(specs)
     names = {spec.name for spec in specs}
     if set(adapters) - names:
@@ -112,7 +114,7 @@ def build_services(*, config, specs, adapters, authorized, clock=time.time, stor
         if unknown:
             raise ValueError("breaker registered without a provider spec: " + ", ".join(sorted(unknown)))
 
-    def gate(spec):
+    def default_gate(spec):
         admission = admit(spec, config, frozenset(authorized), clock())
         if account_ids and accounts is not None:
             account_id = account_ids.get(spec.name)
@@ -125,6 +127,11 @@ def build_services(*, config, specs, adapters, authorized, clock=time.time, stor
                     if cooldown_until is not None and cooldown_until > clock():
                         raise AdmissionDenied("account_cooldown")
         return admission
+
+    if gate is None:
+        gate = default_gate
+    elif not callable(gate):
+        raise TypeError("gate must be callable")
 
     return Services(
         specs=specs,
@@ -389,6 +396,127 @@ def build_real_runtime(*, config, env, clock=time.time, storage=None, timeout=15
             rotation=RoundRobin(),
             account_ids=account_ids,
             accounts=accounts,
+        ),
+        storage=storage,
+    )
+
+
+def build_profiles_runtime(
+    profiles,
+    *,
+    config,
+    storage=None,
+    clock=time.time,
+    key_loader=None,
+    timeout=30.0,
+    max_stream_s=120.0,
+):
+    """Build a multi-channel runtime from user-defined provider profiles."""
+    enabled = []
+    for profile in profiles:
+        profile = provider_profiles.validate_profile(profile)
+        if profile.enabled:
+            enabled.append(profile)
+    if not enabled:
+        raise ValueError("no enabled provider profiles")
+    loader = key_loader or (lambda profile_id: provider_profiles.load_key(profile_id))
+    allow_paid = bool(getattr(config, "allow_user_paid", False))
+    specs = []
+    adapters = {}
+    by_name = {}
+    keys = {}
+    for profile in enabled:
+        try:
+            key = loader(profile.id)
+        except Exception:
+            if profile.cost_policy != "zero_cost_local":
+                raise ValueError("cannot load the key for profile %r" % profile.id) from None
+            key = ""
+        if not key:
+            if profile.cost_policy != "zero_cost_local":
+                raise ValueError("profile %r has no stored key" % profile.id)
+            key = "local-no-key"
+        expires_at = 0.0
+        if profile.cost_policy == "free_verified":
+            expires_at = float(provider_profiles.resolve_evidence(profile, clock=clock))
+        spec = ProviderSpec(
+            profile.id,
+            profile.model,
+            profile.cost_policy,
+            expires_at,
+            profile.capabilities,
+            simulation=False,
+        )
+        adapter = OpenAICompatAdapter(
+            profile.base_url,
+            key,
+            timeout=timeout,
+            max_stream_s=max_stream_s,
+            allow_remote=True,
+            allow_private_http=(profile.cost_policy == "zero_cost_local"),
+        )
+        specs.append(spec)
+        adapters[profile.id] = adapter
+        by_name[profile.id] = profile
+        keys[profile.id] = key
+
+    account_ids = None
+    accounts = getattr(storage, "accounts", None)
+    if accounts is not None:
+        account_ids = {}
+        for profile in enabled:
+            fingerprint = hashlib.sha256(keys[profile.id].encode("utf-8")).hexdigest()
+            account_ids[profile.id] = accounts.ensure(
+                profile.id,
+                "profile-key",
+                "cred:" + provider_profiles.key_ref_for(profile.id),
+                fingerprint,
+                now=clock(),
+                tier=profile.cost_policy,
+                status="active",
+            )
+
+    def profiles_gate(spec):
+        profile = by_name.get(spec.name)
+        if profile is None:
+            raise AdmissionDenied("unknown_profile")
+        if not config.enable_real:
+            raise AdmissionDenied("real_disabled")
+        if profile.cost_policy == "free_verified":
+            try:
+                provider_profiles.resolve_evidence(profile, clock=clock)
+            except provider_profiles.ProfileError:
+                raise AdmissionDenied("expired_free_evidence") from None
+        elif profile.cost_policy == "user_paid" and not allow_paid:
+            raise AdmissionDenied("user_paid_disabled")
+        if account_ids and accounts is not None:
+            row = accounts.get(account_ids[profile.id])
+            if row is not None:
+                if row["status"] != "active":
+                    raise AdmissionDenied("account_" + str(row["status"]))
+                cooldown_until = row["cooldown_until"]
+                if cooldown_until is not None and cooldown_until > clock():
+                    raise AdmissionDenied("account_cooldown")
+        return Admission(
+            provider=spec.name,
+            capabilities=spec.capabilities,
+            simulation=bool(getattr(spec, "simulation", True)),
+            _token=_ADMISSION_TOKEN,
+        )
+
+    return Runtime(
+        config=config,
+        services=build_services(
+            config=config,
+            specs=tuple(specs),
+            adapters=adapters,
+            authorized=frozenset(profile.id for profile in enabled),
+            clock=clock,
+            storage=storage,
+            rotation=RoundRobin(),
+            account_ids=account_ids,
+            accounts=accounts,
+            gate=profiles_gate,
         ),
         storage=storage,
     )

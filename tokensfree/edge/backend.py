@@ -116,6 +116,7 @@ class MemoryBackend:
                     "name": spec.name,
                     "model": spec.model,
                     "simulation": bool(getattr(spec, "simulation", True)),
+                    "cost_policy": getattr(spec, "cost_evidence", "unknown"),
                     "state": state,
                     "policy_reason": reason,
                     "evidence_expires_at": spec.evidence_expires_at,

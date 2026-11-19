@@ -14,6 +14,17 @@ from tokensfree.desktop import config as desktop_config  # noqa: E402
 from tokensfree.desktop.app import DesktopApp  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def isolated_appdata(tmp_path, monkeypatch):
+    appdata = tmp_path / "appdata"
+    appdata.mkdir()
+    monkeypatch.setenv("APPDATA", str(appdata))
+    monkeypatch.setenv("USERPROFILE", str(appdata))
+    monkeypatch.setenv("HOME", str(appdata))
+    monkeypatch.setenv("TOKENSFREE_DESKTOP_DIR", str(appdata / "tokensfree"))
+    yield appdata
+
+
 class FakeController:
     running = True
 

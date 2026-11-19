@@ -9,6 +9,7 @@ never logged and never included in error strings.
 """
 import asyncio
 import http.client
+import ipaddress
 import json
 import time
 from urllib.parse import urlsplit
@@ -26,10 +27,31 @@ QUOTA_CODES = frozenset({"1113", "insufficient_quota", "quota_exhausted"})
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
+def _is_private_host(hostname):
+    host = str(hostname or "").strip().lower()
+    if host in LOOPBACK_HOSTS:
+        return True
+    try:
+        address = ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_private
+
+
 class OpenAICompatAdapter:
     capabilities = frozenset({"text", "stream", "tools"})
 
-    def __init__(self, base_url, api_key, *, timeout=15.0, max_stream_s=120.0, capabilities=None, allow_remote=False):
+    def __init__(
+        self,
+        base_url,
+        api_key,
+        *,
+        timeout=15.0,
+        max_stream_s=120.0,
+        capabilities=None,
+        allow_remote=False,
+        allow_private_http=False,
+    ):
         if not isinstance(api_key, str) or not api_key:
             raise ValueError("api_key must be a non-empty string")
         if not isinstance(base_url, str):
@@ -43,7 +65,8 @@ class OpenAICompatAdapter:
             raise ValueError("upstream url must not carry query or fragment")
         loopback = parts.hostname in LOOPBACK_HOSTS
         if parts.scheme == "http" and not loopback:
-            raise ValueError("plaintext remote upstream refused")
+            if not allow_private_http or not _is_private_host(parts.hostname):
+                raise ValueError("plaintext remote upstream refused")
         if not loopback and not allow_remote:
             raise ValueError("remote upstream requires allow_remote=True")
         if type(timeout) not in (int, float) or isinstance(timeout, bool) or not 0 < timeout <= 60:
