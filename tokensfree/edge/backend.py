@@ -5,6 +5,7 @@ policy (routes, auth, parsing, routing, retries, persistence) stays in the kerne
 MemoryBackend is the reference implementation the contract tests run against.
 """
 import json
+import pathlib
 import time
 import uuid
 from dataclasses import dataclass, replace
@@ -20,6 +21,16 @@ from tokensfree.edge.stream_core import StreamFailure, iter_frames, prepare_stre
 from tokensfree.errors import ErrorCode
 
 JSON_TYPE = "application/json; charset=utf-8"
+WEB_TYPES = {
+    "index.html": "text/html; charset=utf-8",
+    "app.js": "application/javascript; charset=utf-8",
+    "style.css": "text/css; charset=utf-8",
+}
+WEB_FILES = frozenset(WEB_TYPES)
+WEB_CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self';"
+    " img-src 'self' data:; base-uri 'none'; form-action 'none'"
+)
 SSE_TYPE = "text/event-stream; charset=utf-8"
 BASE_HEADERS = {"cache-control": "no-store", "x-content-type-options": "nosniff"}
 
@@ -43,16 +54,21 @@ class EdgeResponse:
 class MemoryBackend:
     """Reference backend with no sockets, used by the contract tests."""
 
-    def __init__(self, *, config, services, port, token=None):
+    def __init__(self, *, config, services, port, token=None, static_dir=None):
         if type(port) is not int or not 1 <= port <= 65535:
             raise ValueError("invalid port")
         resolved = token if token is not None else config.local_token
         if not isinstance(resolved, str) or not resolved:
             raise ValueError("stable local token required")
+        if static_dir is not None:
+            static_dir = pathlib.Path(static_dir)
+            if not static_dir.is_dir():
+                raise ValueError("static_dir must be an existing directory")
         self.config = config
         self.services = services
         self.port = port
         self.token = resolved
+        self.static_dir = static_dir
         self.started_at = time.time()
 
     def _json(self, status, payload, extra_headers=None):
@@ -65,6 +81,21 @@ class MemoryBackend:
     def _error(self, code, request_id, *, extra_headers=None):
         status, payload = build_error(code, request_id)
         return self._json(status, payload, extra_headers)
+
+    def _static_file(self, path, request_id):
+        if self.static_dir is None:
+            return self._error(ErrorCode.not_found, request_id)
+        name = "index.html" if path == "/" else path[len("/web/"):]
+        if name not in WEB_FILES:
+            return self._error(ErrorCode.not_found, request_id)
+        try:
+            body = (self.static_dir / name).read_bytes()
+        except OSError:
+            return self._error(ErrorCode.not_found, request_id)
+        headers = {"content-type": WEB_TYPES[name], **BASE_HEADERS}
+        if name.endswith(".html"):
+            headers["content-security-policy"] = WEB_CSP
+        return EdgeResponse(status=200, headers=headers, body=body)
 
     def _host_allowed(self, request):
         return origin_allowed(request.headers.get("host"), request.headers.get("origin"), self.port)
@@ -197,6 +228,17 @@ class MemoryBackend:
             raise TypeError("request must be an EdgeRequest")
         if not self._host_allowed(request):
             return self._error(ErrorCode.origin_rejected, request_id)
+        if request.path == "/" or request.path.startswith("/web/"):
+            if request.method.upper() != "GET":
+                return self._error(ErrorCode.method_not_allowed, request_id, extra_headers={"allow": "GET"})
+            return self._static_file(request.path, request_id)
+        if request.path == "/api/session" and self.static_dir is not None:
+            if request.method.upper() != "GET":
+                return self._error(ErrorCode.method_not_allowed, request_id, extra_headers={"allow": "GET"})
+            # The browser console needs the local token before it can call the API.
+            # This stays loopback-only (Host/Origin already validated) and mirrors the
+            # legacy console; the token is not a provider key.
+            return self._json(200, {"token": self.token, "base_url": "http://127.0.0.1:%d/v1" % self.port})
         route = resolve(request.method, request.path)
         if route is None:
             methods = allowed_methods(request.path)

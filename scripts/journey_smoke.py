@@ -109,6 +109,20 @@ def main():
                 and status_payload["simulation"] is True
             )
 
+            status, console_headers, console_body = call("GET", "/", token=None)
+            checks["console_index"] = (
+                status == 200
+                and console_headers.get("content-type", "").startswith("text/html")
+                and "content-security-policy" in console_headers
+                and "tokensfree" in console_body.decode("utf-8", "replace")
+            )
+            status, assets_headers, _ = call("GET", "/web/app.js", token=None)
+            checks["console_assets"] = status == 200 and assets_headers.get("content-type", "").startswith(
+                "application/javascript"
+            )
+            status, _, session_body = call("GET", "/api/session", token=None)
+            checks["console_session"] = status == 200 and json.loads(session_body)["token"] == TOKEN
+
             checks["unauthorized"] = call("GET", "/v1/models", token=None)[0] == 401
             checks["bad_host"] = call("GET", "/v1/models", host="evil.example")[0] == 403
         finally:

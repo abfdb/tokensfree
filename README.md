@@ -78,7 +78,9 @@ $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
 .venv\Scripts\python -m tokensfree.edge.host --port 8766
 ```
 
-端点：`GET /v1/models`、`POST /v1/chat/completions`（非流式）。Host/Origin/令牌校验与旧实现共用同一套函数。
+启动后浏览器打开 `http://127.0.0.1:8766/` 就是**网页控制台**（模型选择、流式对话、运行时状态、连接信息复制）。
+
+端点：`GET /v1/models`、`POST /v1/chat/completions`（非流式）、`GET /api/status`、`GET /api/session`（浏览器控制台用本地令牌）。Host/Origin/令牌校验与旧实现共用同一套函数。
 mock 运行时没有流式适配器，因此 `stream:true` 会得到明确的 `400 unsupported_capability`（不静默降级）。
 要演示完整流式链路，先起一个本地假 SSE 上游，再启动后端：
 

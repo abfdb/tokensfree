@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tokensfree 控制台</title>
+<link rel="stylesheet" href="/web/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="logo">tf</span>
+    <div>
+      <h1>tokensfree</h1>
+      <p class="sub">本地免费额度路由层 · 控制台</p>
+    </div>
+  </div>
+  <div class="meta">
+    <span id="mode-badge" class="badge">连接中…</span>
+    <span id="version" class="dim">-</span>
+    <span id="uptime" class="dim">-</span>
+    <button id="refresh-status" class="ghost" type="button">刷新状态</button>
+  </div>
+</header>
+
+<div id="error-banner" class="error hidden" role="alert"></div>
+
+<main class="grid">
+  <section class="card chat">
+    <div class="card-head">
+      <h2>对话</h2>
+      <div class="row">
+        <label class="dim" for="model-select">模型</label>
+        <select id="model-select"></select>
+        <label class="switch"><input id="stream-toggle" type="checkbox" checked> 流式</label>
+      </div>
+    </div>
+    <div id="transcript" class="transcript" aria-live="polite">
+      <div class="hint">
+        这是本地网关，请求会按准入策略路由到 mock 或真实 provider。
+        真实调用需要三项条件全部满足（开关 / 授权 / 未过期的免费证据）。
+      </div>
+    </div>
+    <form id="chat-form" class="composer">
+      <textarea id="prompt" rows="3" placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
+      <div class="row">
+        <button id="send-btn" class="primary" type="submit">发送</button>
+        <button id="stop-btn" class="ghost" type="button" disabled>停止</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card status">
+    <div class="card-head"><h2>运行时状态</h2></div>
+    <div class="status-block">
+      <h3>Providers</h3>
+      <div id="status-providers" class="table"></div>
+    </div>
+    <div class="status-block">
+      <h3>账号</h3>
+      <div id="status-accounts" class="table"></div>
+    </div>
+    <div class="status-block">
+      <h3>熔断</h3>
+      <div id="status-breakers" class="table"></div>
+    </div>
+    <div class="status-block">
+      <h3>客户端连接信息</h3>
+      <div class="kv"><span class="dim">Base URL</span><code id="base-url">-</code></div>
+      <div class="kv"><span class="dim">本地令牌</span><code id="token-masked">••••••••</code></div>
+      <div class="row">
+        <button id="copy-base" class="ghost" type="button">复制 Base URL</button>
+        <button id="copy-token" class="ghost" type="button">复制令牌</button>
+        <button id="toggle-token" class="ghost" type="button">显示</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot dim">
+  仅绑定 127.0.0.1 · 本地令牌不是供应商 API Key · 不支持公网访问
+</footer>
+
+<script src="/web/app.js"></script>
+</body>
+</html>

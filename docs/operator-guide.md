@@ -33,7 +33,9 @@ $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
 .venv\Scripts\python -m tokensfree --port 8766 --db .\tokensfree.db
 ~~~
 
-端点：`GET /v1/models`、`POST /v1/chat/completions`（非流式）。
+浏览器打开 `http://127.0.0.1:8766/` 使用**网页控制台**：选择模型、流式对话、查看 providers/账号/熔断状态、复制 Base URL 与本地令牌。
+
+端点：`GET /v1/models`、`POST /v1/chat/completions`（非流式）、`GET /api/status`、`GET /api/session`（控制台获取本地令牌；仅 loopback + Host 校验，等价于旧控制台的 session 端点）。
 `stream:true` 会得到 `400 unsupported_capability`——mock 运行时没有流式适配器，这是**有意的 fail-closed**。
 
 ### 2.3 新后端（loopback 流式运行时）

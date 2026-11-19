@@ -6,6 +6,7 @@ streaming responses, bounded sizes, no keep-alive.
 """
 import asyncio
 import json
+import pathlib
 import sqlite3
 
 from tokensfree.edge.protocol import build_error
@@ -299,7 +300,14 @@ def main():
         storage.close()
         return 0
 
-    backend = MemoryBackend(config=config, services=runtime.services, port=args.port or 8766, token=config.local_token)
+    web_dir = pathlib.Path(__file__).resolve().with_name("web")
+    backend = MemoryBackend(
+        config=config,
+        services=runtime.services,
+        port=args.port or 8766,
+        token=config.local_token,
+        static_dir=web_dir if web_dir.is_dir() else None,
+    )
     host = AsgiHost(make_asgi_app(backend), port=args.port, max_body=config.max_body_bytes)
 
     def announce(port):
