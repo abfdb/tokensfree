@@ -25,7 +25,7 @@ def launcher_content(repo_root):
     return (
         "@echo off\r\n"
         "cd /d \"%s\"\r\n"
-        "start \"\" \"%s\" -m tokensfree.desktop\r\n" % (repo_root, pythonw_executable())
+        "start \"\" \"%s\" -m tokensfree.desktop --start-gateway\r\n" % (repo_root, pythonw_executable())
     )
 
 

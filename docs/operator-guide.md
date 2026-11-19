@@ -43,7 +43,7 @@ powershell -ExecutionPolicy Bypass -File install\install.ps1 -Autostart # 同时
 powershell -ExecutionPolicy Bypass -File install\uninstall.ps1 -RemoveData
 ~~~
 
-桌面面板：模式/端口/数据库设置、启动/停止网关、打开网页控制台、providers/账号/熔断状态、日志尾部；关闭窗口默认最小化到系统托盘（托盘菜单：显示面板 / 打开控制台 / 启停网关 / 退出）。配置在 `%APPDATA%\tokensfree\desktop.json`，只保存本地网关令牌，不保存供应商 key。
+桌面面板：模式/端口/数据库设置、启动/停止网关、打开网页控制台、providers/账号/熔断状态、日志尾部；关闭窗口默认最小化到系统托盘（托盘菜单：显示面板 / 打开控制台 / 启停网关 / 退出）。通过快捷方式或开机启动运行时带 `--start-gateway`，打开面板即自动启动网关。配置在 `%APPDATA%\tokensfree\desktop.json`，只保存本地网关令牌，不保存供应商 key。
 
 浏览器打开 `http://127.0.0.1:8766/` 使用**网页控制台**：选择模型、流式对话、查看 providers/账号/熔断状态、复制 Base URL 与本地令牌。
 

@@ -13,6 +13,7 @@ def test_enable_creates_launcher(monkeypatch, tmp_path):
     assert "cd /d" in content
     assert str(repo) in content
     assert "tokensfree.desktop" in content
+    assert "--start-gateway" in content
     assert path.parent.name == "Startup"
 
 

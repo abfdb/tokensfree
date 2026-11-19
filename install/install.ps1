@@ -45,7 +45,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $resolvedRepo 'tokensfree'))) {
   throw "RepoRoot does not look like the tokensfree repository: $resolvedRepo"
 }
 $pythonw = Resolve-Pythonw -Root $resolvedRepo
-$arguments = '-m tokensfree.desktop'
+$arguments = '-m tokensfree.desktop --start-gateway'
 
 New-Item -ItemType Directory -Force -Path $StartMenuDir | Out-Null
 $startMenuShortcut = Join-Path $StartMenuDir 'tokensfree 控制台.lnk'

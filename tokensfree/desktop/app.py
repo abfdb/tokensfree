@@ -372,6 +372,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="tokensfree desktop shell")
     parser.add_argument("--self-check", action="store_true", help="start a mock gateway, verify it, then exit")
     parser.add_argument("--config", default=None, help="path to the desktop config JSON")
+    parser.add_argument("--start-gateway", action="store_true", help="start the gateway when the panel opens")
     args = parser.parse_args(argv)
     if args.self_check:
         return run_self_check()
@@ -379,7 +380,9 @@ def main(argv=None):
     desktop_config.save_config(config, args.config)
     root = tk.Tk()
     try:
-        DesktopApp(root, config=config)
+        app = DesktopApp(root, config=config)
+        if args.start_gateway:
+            root.after(200, app.start_gateway)
     except tk.TclError as error:
         print("cannot create the desktop window: %s" % error, file=sys.stderr)
         return 2
