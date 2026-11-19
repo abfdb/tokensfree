@@ -15,7 +15,7 @@ from dataclasses import dataclass, replace
 
 APP_DIR_NAME = "tokensfree"
 CONFIG_NAME = "desktop.json"
-MODES = ("mock", "loopback", "real")
+MODES = ("mock", "loopback", "real", "profiles")
 PORT_MIN = 1
 PORT_MAX = 65535
 DEFAULT_PORT = 8766
@@ -63,6 +63,8 @@ class DesktopConfig:
     loopback_port: int = 0
     autostart: bool = False
     minimize_to_tray: bool = True
+    profiles_path: str = ""
+    allow_user_paid: bool = False
 
 
 def _validate_port(value, *, label, allow_zero):
@@ -107,6 +109,8 @@ def load_config(path=None):
         loopback_port=data.get("loopback_port", 0),
         autostart=bool(data.get("autostart", False)),
         minimize_to_tray=bool(data.get("minimize_to_tray", True)),
+        profiles_path=str(data.get("profiles_path") or ""),
+        allow_user_paid=bool(data.get("allow_user_paid", False)),
     )
     return validate_config(config)
 
@@ -124,6 +128,8 @@ def save_config(config, path=None):
         "loopback_port": config.loopback_port,
         "autostart": config.autostart,
         "minimize_to_tray": config.minimize_to_tray,
+        "profiles_path": config.profiles_path,
+        "allow_user_paid": config.allow_user_paid,
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
@@ -148,11 +154,18 @@ def launch_spec(config, *, python=None, root=None):
     python = python or sys.executable
     root = pathlib.Path(root) if root is not None else repo_root()
     args = [python, "-m", "tokensfree", "--port", str(config.port), "--db", config.db_path]
+    env = dict(os.environ)
+    env["TOKENSFREE_LOCAL_TOKEN"] = config.token
+    env["PYTHONPATH"] = str(root)
     if config.mode == "loopback":
         args.extend(["--loopback", str(config.loopback_port)])
     elif config.mode == "real":
         args.append("--real")
-    env = dict(os.environ)
-    env["TOKENSFREE_LOCAL_TOKEN"] = config.token
-    env["PYTHONPATH"] = str(root)
+    elif config.mode == "profiles":
+        from tokensfree import profiles as provider_profiles
+
+        args.extend(["--profiles", config.profiles_path or str(provider_profiles.default_profiles_path())])
+        env["TOKENSFREE_ENABLE_REAL"] = "1"
+        if config.allow_user_paid:
+            env["TOKENSFREE_ALLOW_USER_PAID"] = "1"
     return args, env, str(root)

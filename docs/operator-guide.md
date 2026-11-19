@@ -111,6 +111,47 @@ $env:TOKENSFREE_REAL_EVIDENCE_SNAPSHOT = "D:\IFan\tokensfree\.superpowers\eviden
 
 启动前可自检：`.venv\Scripts\python -m tokensfree --check [--real]`——只校验配置（key 来源、证据、db），输出 JSON，**不绑定端口、不发起请求**。
 
+### 自定义接入通道
+
+把任意 OpenAI 兼容 endpoint（本机 Ollama / LM Studio / vLLM、远端 HTTPS）接入网关。桌面面板的 **"接入通道"** 页可视化增删改/测试连接；也可直接编辑 `%APPDATA%\tokensfree\providers.json`。
+
+```json
+{
+  "version": 1,
+  "profiles": [
+    {
+      "id": "local-ollama", "name": "本机 Ollama",
+      "base_url": "http://127.0.0.1:11434/v1", "model": "qwen2.5:7b",
+      "cost_policy": "zero_cost_local", "capabilities": ["text", "stream"], "enabled": true
+    },
+    {
+      "id": "zhipu-free", "name": "智谱免费额度",
+      "base_url": "https://open.bigmodel.cn/api/paas/v4", "model": "glm-4.7-flash",
+      "cost_policy": "free_verified", "capabilities": ["text", "stream", "tools"],
+      "evidence": {"snapshot": "...zhipu-1795001938.json"}, "enabled": true
+    }
+  ]
+}
+```
+
+| 成本策略 | 适用 | 约束 |
+|---|---|---|
+| `free_verified` | 有免费证据的云模型 | 证据快照/到期时间有效，启动校验并绑定模型 |
+| `zero_cost_local` | 自己的算力 | 允许 loopback/私网明文 http；无需证据 |
+| `user_paid` | 自己的付费 token | 默认禁止；需 `TOKENSFREE_ALLOW_USER_PAID=1`（桌面勾选"允许自费通道"），强制 https |
+
+凭据只存 Windows 凭据管理器 `tokensfree/<通道 id>/env-key`（`scripts/credential_store.py set --provider <通道 id>`），providers.json 只存引用。**本地通道可留空 key**。
+
+启动：
+
+```powershell
+$env:TOKENSFREE_ENABLE_REAL = "1"
+.venv\Scripts\python -m tokensfree --check --profiles .\providers.json
+.venv\Scripts\python -m tokensfree --profiles .\providers.json --port 8766 --db .\tokensfree.db
+```
+
+桌面面板模式选 **"profiles"**（自定义通道）即自动带上述参数启动；`/api/status` 的 providers 会显示每个通道的 `cost_policy`，`/v1/models` 合并列出所有通道模型。
+
 ### 系统凭据库（Windows）
 
 ~~~powershell

@@ -80,3 +80,16 @@ def test_launch_spec_for_each_mode(tmp_path):
         make_config(tmp_path, mode="loopback", loopback_port=19000), python="py", root=root
     )
     assert loop_args[-2:] == ["--loopback", "19000"]
+
+
+def test_launch_spec_for_profiles_mode(tmp_path):
+    profiles_file = tmp_path / "providers.json"
+    config = make_config(tmp_path, mode="profiles", profiles_path=str(profiles_file))
+    args, env, _cwd = desktop_config.launch_spec(config, python="py", root=tmp_path)
+    assert args[-2:] == ["--profiles", str(profiles_file)]
+    assert env["TOKENSFREE_ENABLE_REAL"] == "1"
+    assert "TOKENSFREE_ALLOW_USER_PAID" not in env
+
+    paid = make_config(tmp_path, mode="profiles", allow_user_paid=True)
+    _args, paid_env, _cwd = desktop_config.launch_spec(paid, python="py", root=tmp_path)
+    assert paid_env["TOKENSFREE_ALLOW_USER_PAID"] == "1"

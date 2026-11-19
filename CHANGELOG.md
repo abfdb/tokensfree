@@ -43,6 +43,7 @@
 - 环境变量驱动的真实供应商装配（`--real` + `TOKENSFREE_REAL_*`）：D2 之后只需配置，不用改代码
 - 真实联调验证（2026-11-19）：智谱 glm-4.7-flash 探针（非流式/流式/工具）与真实网关 + DSH 验收全部通过；`real_probe.py` 增加 1305 退避重试与 `--max-tokens`（推理模型需更大预算），OpenAI 兼容适配器回填 provider 报告的 `model`
 - Windows 桌面外壳：`python -m tokensfree.desktop`（tkinter 控制面板、ctypes 系统托盘、开机启动、网关进程管理、`--self-check`、快捷方式带 `--start-gateway` 自动启动网关），`install/install.ps1` + `uninstall.ps1` 创建/清理用户级快捷方式
+- 自定义接入通道：providers.json + `--profiles` 多通道运行时，支持本机 Ollama/LM Studio/vLLM 与远端 HTTPS OpenAI 兼容 endpoint；成本策略 free_verified / zero_cost_local / user_paid（默认禁止，需 TOKENSFREE_ALLOW_USER_PAID=1）；密钥只存 Windows 凭据管理器；桌面面板新增"接入通道"页（增删改/测试连接/凭据写入）
 - 网页控制台：新内核新增 `/`（单页控制台：模型选择/流式对话/状态面板/连接信息复制）与 `/api/session`（loopback 本地令牌），静态资源走 `/web/*`，CSP + 路径白名单
 - 启动前自检：`python -m tokensfree --check [--real]` 只校验配置（key/证据/db）并输出 JSON，不绑定端口、不发起请求
 - Windows 系统凭据库：`tokensfree/credstore.py` + `scripts/credential_store.py`（命名空间 `tokensfree/<provider>/<alias>`），运行时用 `TOKENSFREE_REAL_API_KEY_STORE` 读取，key 不落文件/环境变量；其他平台 fail-closed

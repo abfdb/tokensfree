@@ -281,3 +281,36 @@ def resolve_evidence(profile, *, clock=None, snapshot_reader=None):
     if expires_at <= now:
         raise ProfileError("free-tier evidence has expired; refresh it")
     return expires_at
+
+
+def profile_from_form(*, profile_id=None, form):
+    """Build a validated Profile from desktop-form values (no secret handling)."""
+    if not isinstance(form, dict):
+        raise ProfileError("form must be a dict")
+    policy = str(form.get("cost_policy") or "free_verified").strip()
+    capabilities = form.get("capabilities") or ["text"]
+    if not isinstance(capabilities, (list, tuple, set, frozenset)):
+        raise ProfileError("capabilities must be a list")
+    evidence = None
+    if policy == "free_verified":
+        snapshot = str(form.get("evidence_snapshot") or "").strip()
+        raw_expires = form.get("evidence_expires_at")
+        if snapshot:
+            evidence = {"snapshot": snapshot}
+        elif raw_expires not in (None, ""):
+            try:
+                evidence = {"expires_at": float(raw_expires)}
+            except (TypeError, ValueError):
+                raise ProfileError("evidence_expires_at must be a unix timestamp") from None
+    return validate_profile(
+        Profile(
+            id=str(profile_id or new_profile_id(form.get("name"))),
+            name=str(form.get("name") or ""),
+            base_url=str(form.get("base_url") or ""),
+            model=str(form.get("model") or ""),
+            cost_policy=policy,
+            capabilities=frozenset(str(item) for item in capabilities),
+            evidence=evidence,
+            enabled=bool(form.get("enabled", True)),
+        )
+    )

@@ -141,3 +141,30 @@ class GatewayController:
                 process.wait(timeout=5)
         self._process = None
         self._port = None
+
+
+def probe_endpoint(base_url, api_key=None, *, timeout=8.0):
+    """GET {base_url}/models and return (models, latency_s); raises RuntimeError on failure."""
+    import time as _time
+
+    base = str(base_url or "").rstrip("/")
+    if not base:
+        raise RuntimeError("base_url is empty")
+    headers = {"Accept": "application/json"}
+    if api_key:
+        headers["Authorization"] = "Bearer " + api_key
+    request = urllib.request.Request(base + "/models", headers=headers)
+    started = _time.time()
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read(256 * 1024).decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        raise RuntimeError("HTTP %d from %s/models" % (error.code, base)) from None
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        raise RuntimeError("cannot reach %s: %s" % (base, error)) from None
+    latency = round(_time.time() - started, 3)
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list):
+        raise RuntimeError("endpoint did not return an OpenAI-compatible model list")
+    models = [str(item.get("id")) for item in data if isinstance(item, dict) and item.get("id")]
+    return models, latency

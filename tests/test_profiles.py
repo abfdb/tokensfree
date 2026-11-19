@@ -188,3 +188,55 @@ def test_credentials_never_go_into_the_profiles_file(tmp_path, monkeypatch):
     assert "secret-value" not in path.read_text(encoding="utf-8")
     delete_key(profile.id)
     assert saved == {}
+
+
+def test_profile_from_form_builds_validated_profiles(tmp_path):
+    local = profiles_module.profile_from_form(
+        form={
+            "name": "本机 Ollama",
+            "base_url": "http://127.0.0.1:11434/v1",
+            "model": "qwen2.5:7b",
+            "cost_policy": "zero_cost_local",
+            "capabilities": ["text", "stream"],
+        }
+    )
+    assert local.id.startswith("ollama-")
+    assert local.cost_policy == "zero_cost_local"
+    assert local.enabled is True
+
+    snapshot = tmp_path / "evidence.json"
+    snapshot.write_text("{}", encoding="utf-8")
+    free = profiles_module.profile_from_form(
+        profile_id="zhipu-free",
+        form={
+            "name": "智谱免费",
+            "base_url": "https://open.bigmodel.cn/api/paas/v4",
+            "model": "glm-4.7-flash",
+            "cost_policy": "free_verified",
+            "capabilities": ["text", "stream", "tools"],
+            "evidence_snapshot": str(snapshot),
+        }
+    )
+    assert free.evidence == {"snapshot": str(snapshot)}
+
+    expires = profiles_module.profile_from_form(
+        profile_id="free-2",
+        form={
+            "name": "Free",
+            "base_url": "https://example.com/v1",
+            "model": "m",
+            "cost_policy": "free_verified",
+            "evidence_expires_at": "2000000000",
+        }
+    )
+    assert expires.evidence == {"expires_at": 2000000000.0}
+
+    with pytest.raises(ProfileError):
+        profiles_module.profile_from_form(
+            form={
+                "name": "bad",
+                "base_url": "http://example.com/v1",
+                "model": "m",
+                "cost_policy": "zero_cost_local",
+            }
+        )

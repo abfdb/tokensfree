@@ -180,3 +180,46 @@ def test_tray_console_command_without_a_port_is_a_noop(tmp_path):
             root.destroy()
         except tk.TclError:
             pass
+
+
+def test_channels_tab_lists_and_toggles_profiles(tmp_path):
+    from tokensfree import profiles as provider_profiles
+
+    profile = provider_profiles.profile_from_form(
+        profile_id="local-ollama",
+        form={
+            "name": "本机 Ollama",
+            "base_url": "http://127.0.0.1:11434/v1",
+            "model": "qwen2.5:7b",
+            "cost_policy": "zero_cost_local",
+            "capabilities": ["text", "stream"],
+        },
+    )
+    path = provider_profiles.default_profiles_path()
+    provider_profiles.save_profiles([profile], path)
+
+    import tkinter as tk
+
+    try:
+        root = tk.Tk()
+    except tk.TclError as error:
+        pytest.skip("no display for tkinter: %s" % error)
+    config = desktop_config.DesktopConfig(port=9999, token="T" * 32, db_path=str(tmp_path / "state.db"))
+    app = DesktopApp(root, config=config, controller=FakeController(), tray=False)
+    try:
+        root.update()
+        rows = app.channels_tree.get_children()
+        assert list(rows) == ["local-ollama"]
+        values = app.channels_tree.item("local-ollama", "values")
+        assert values[0] == "本机 Ollama"
+        assert values[4] == "是"
+        app.channels_tree.selection_set("local-ollama")
+        app._toggle_channel()
+        reloaded = provider_profiles.load_profiles(path)
+        assert reloaded[0].enabled is False
+        assert app.channels_tree.item("local-ollama", "values")[4] == "否"
+    finally:
+        try:
+            root.destroy()
+        except tk.TclError:
+            pass

@@ -55,3 +55,52 @@ def test_stop_without_start_is_a_noop(controller):
     controller.stop()
     assert not controller.running
     assert controller.exit_code is None
+
+
+def test_probe_endpoint_lists_models(tmp_path):
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_GET(self):
+            if self.path != "/v1/models":
+                self.send_response(404)
+                self.end_headers()
+                return
+            body = json.dumps({"data": [{"id": "m1"}, {"id": "m2"}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        from tokensfree.desktop.process import probe_endpoint
+
+        models, latency = probe_endpoint("http://127.0.0.1:%d/v1" % server.server_port)
+        assert models == ["m1", "m2"]
+        assert latency >= 0
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(5)
+
+
+def test_probe_endpoint_reports_failures():
+    import socket
+    from tokensfree.desktop.process import probe_endpoint
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    with pytest.raises(RuntimeError):
+        probe_endpoint("http://127.0.0.1:%d/v1" % port, timeout=2)
+    with pytest.raises(RuntimeError):
+        probe_endpoint("")
