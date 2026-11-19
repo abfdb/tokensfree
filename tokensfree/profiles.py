@@ -43,7 +43,7 @@ def default_profiles_path():
 
 
 def key_ref_for(profile_id):
-    return "tokensfree/" + profile_id + "/api-key"
+    return "tokensfree/" + profile_id + "/env-key"
 
 
 def new_profile_id(name):
