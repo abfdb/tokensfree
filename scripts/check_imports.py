@@ -1,7 +1,8 @@
 """Static egress guard for the new kernel.
 
 Network primitives may only appear where the design allows them: provider
-adapters and the loopback HTTP host. Everything else in `tokensfree/` must stay
+adapters, the loopback HTTP host, and the desktop supervisor (which polls the
+loopback gateway only). Everything else in `tokensfree/` must stay
 pure, so a future change cannot quietly open a socket from the router or store.
 
 Run: python scripts/check_imports.py
@@ -12,7 +13,11 @@ import pathlib
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PACKAGE = "tokensfree"
 NETWORK_MODULES = {"socket", "ssl", "http.client", "http.server", "urllib.request", "ftplib", "smtplib", "xmlrpc.client"}
-ALLOWED_PATHS = ("tokensfree/adapters/", "tokensfree/edge/host.py")
+ALLOWED_PATHS = (
+    "tokensfree/adapters/",
+    "tokensfree/edge/host.py",
+    "tokensfree/desktop/process.py",
+)
 
 
 def module_name(node):
@@ -56,7 +61,7 @@ def main():
     if violations:
         for path, line, module in violations:
             print("violation: %s:%d imports %s" % (path, line, module))
-        print("import guard FAILED: move network code into tokensfree/adapters/ or tokensfree/edge/host.py")
+        print("import guard FAILED: move network code into tokensfree/adapters/, tokensfree/edge/host.py or tokensfree/desktop/process.py")
         return 1
     print("import guard ok: no network imports outside adapters/host")
     return 0

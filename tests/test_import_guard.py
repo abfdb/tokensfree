@@ -36,3 +36,14 @@ def test_guard_allows_adapters_and_host(tmp_path):
     (host / "host.py").write_text("import asyncio\n", encoding="utf-8")
     guard = load_guard()
     assert guard.scan(tmp_path) == []
+
+
+
+def test_guard_allows_the_desktop_supervisor_and_flags_other_desktop_modules(tmp_path):
+    desktop = tmp_path / "tokensfree" / "desktop"
+    desktop.mkdir(parents=True)
+    (desktop / "process.py").write_text("import urllib.request\n", encoding="utf-8")
+    (desktop / "config.py").write_text("import socket\n", encoding="utf-8")
+    guard = load_guard()
+    violations = guard.scan(tmp_path)
+    assert [(entry[0], entry[2]) for entry in violations] == [("tokensfree/desktop/config.py", "socket")]
