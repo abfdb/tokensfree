@@ -291,7 +291,7 @@ DSH 的自定义 provider 走 `dsh-llm-pi-ai` 的 hand-declared route。实测�
 | P3 持久化 + 接入请求链路 | ✅ | `tokensfree/store/*`、`edge/app_core.py` |
 | 边缘协议 + 应用核心 + 运行时装配 | ✅ | `edge/protocol.py`、`edge/app_core.py`、`runtime.py` |
 | P1 Task 6–7：HTTP 边缘 + 双实现对照 | ✅ D1 以零框架 stdlib host 落地 | `edge/asgi.py`、`edge/backend.py`、`edge/host.py` |
-| 真实供应商装配 + 探针 + 验收 + 证据快照 | ✅ 等填入智谱 key（D2 已选定） | `adapters/openai_compat.py`、`runtime.build_real_runtime`、`scripts/{real_probe,real_smoke,evidence_snapshot}.py`、`docs/providers/zhipu.md` |
+| 真实供应商装配 + 探针 + 验收 + 证据快照 | ✅ 已用智谱 glm-4.7-flash 实测通过（2026-11-19） | `adapters/openai_compat.py`、`runtime.build_real_runtime`、`scripts/{real_probe,real_smoke,evidence_snapshot}.py`、`docs/providers/zhipu.md` |
 | 多额度池与账号生命周期（多 key / 轮转 / 熔断持久化 / 配额账本 / 运维 CLI） | ✅ | `runtime.py`、`store/repos.py`、`router/{health,execute}.py`、`edge/app_core.py`、`scripts/accounts_admin.py` |
 | DSH 端到端冒烟 + 用户旅程 | ✅ | `scripts/dsh_smoke.py`、`scripts/journey_smoke.py` |
 | 系统凭据库（Windows Credential Manager） | ✅ 已实现并本机验证；跨平台 keyring 未实现 | `tokensfree/credstore.py`、`scripts/credential_store.py`、`docs/credential-boundary.md` |

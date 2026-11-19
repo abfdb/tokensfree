@@ -41,6 +41,7 @@
 - `/api/status` 含版本与运行时长；CLI 支持 `--version`
 - 真实调用闸门：开关 + 授权 + 未过期免费证据三者同时成立才放行（默认关闭）
 - 环境变量驱动的真实供应商装配（`--real` + `TOKENSFREE_REAL_*`）：D2 之后只需配置，不用改代码
+- 真实联调验证（2026-11-19）：智谱 glm-4.7-flash 探针（非流式/流式/工具）与真实网关 + DSH 验收全部通过；`real_probe.py` 增加 1305 退避重试与 `--max-tokens`（推理模型需更大预算），OpenAI 兼容适配器回填 provider 报告的 `model`
 - 启动前自检：`python -m tokensfree --check [--real]` 只校验配置（key/证据/db）并输出 JSON，不绑定端口、不发起请求
 - Windows 系统凭据库：`tokensfree/credstore.py` + `scripts/credential_store.py`（命名空间 `tokensfree/<provider>/<alias>`），运行时用 `TOKENSFREE_REAL_API_KEY_STORE` 读取，key 不落文件/环境变量；其他平台 fail-closed
 - 流式请求不支持 `Idempotency-Key`：带键的 `stream:true` 请求返回 400 `invalid_request`（流无法逐字节重放，静默忽略会破坏 exactly-once 语义）

@@ -60,6 +60,16 @@ $env:TOKENSFREE_REAL_EVIDENCE_SNAPSHOT = ".superpowers\evidence\zhipu-<时间戳
 
 启动时会校验快照里的 `model` / `provider` 与配置一致；快照过期或指向别的模型都会 fail-closed。
 
+## 实测记录（2026-11-19，glm-4.7-flash）
+
+- 鉴权与端点：`GET /models` 200；`POST /chat/completions` 正常，Bearer key 可用
+- `/models` 列表只含 glm-4.5 / 4.6 / 4.7 / 5.x 等，**不列 glm-4.7-flash**，但 chat 端点接受该模型名（免费通道）
+- 高峰期返回 `429 {"error":{"code":"1305","message":"该模型当前访问量过大，请您稍后再试"}}`——可重试（我们的 `rate_limited`），退避 5–25s 后通常成功
+- **推理模型**：`message.reasoning_content` 承载思考；`max_tokens=16` 时思考耗尽预算、`content` 为空且 `finish_reason=length`；`max_tokens=512` 正常返回正文
+- 工具调用：给 `tools` 与强制提示后返回 `tool_calls`（`read`），我们的适配器解析成功
+- 非流式响应含 `usage`（`completion_tokens` 含推理 token）；流式为多段 delta（推理增量）+ finish + done，正文最终 2 字符 `OK`
+- key 可存 Windows 凭据管理器 `tokensfree/zhipu/env-key`，运行时用 `TOKENSFREE_REAL_API_KEY_STORE=zhipu`
+
 免费证据建议每 30 天复核一次定价页后更新 `TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT`，并把 URL 与抓取时间记入 `.superpowers/` 下的进度账本（不进 Git 的内容）。
 
 ## 待办（拿到 Key 后）

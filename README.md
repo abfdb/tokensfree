@@ -50,7 +50,7 @@ print(json.load(urllib.request.urlopen(req)))
 
 ## 已实现 / 未实现（截至 2026-11-18）
 
-新内核已接入 HTTP 边缘并可作为独立服务运行（`python -m tokensfree`，零第三方运行时依赖）：真实供应商适配器、DSH 端到端冒烟、多额度池（多 key 轮换 / 账号状态 / 配额账本 / 运维 CLI）均已实现。仍待完成：真实供应商联调（等填入 key）、系统凭证库（keyring）、Windows 安装包与后台常驻、GPU 调度。旧 `python server.py` 保留为冻结的 mock 参考实现。
+新内核已接入 HTTP 边缘并可作为独立服务运行（`python -m tokensfree`，零第三方运行时依赖）：真实供应商适配器、DSH 端到端冒烟、多额度池（多 key 轮换 / 账号状态 / 配额账本 / 运维 CLI）均已实现。仍待完成（可选）：跨平台系统凭据库（Windows Credential Manager 已实现）、Windows 安装包与后台常驻、GPU 调度。真实供应商联调已于 2026-11-19 用智谱 glm-4.7-flash 验证通过。旧 `python server.py` 保留为冻结的 mock 参考实现。
 
 **新内核（`tokensfree/`，零运行时依赖）**
 
@@ -127,9 +127,9 @@ python check_dsh_contract.py # 8 组拒绝行为矩阵，退出 0 表示符合�
 | P2 真实 DSH headless 端到端（合成上游，工具往返） | ✅ 已验证 |
 | P3 持久化：迁移 / 幂等 / 只增账本 / 事件 / 账号 / 熔断状态（`--db` 可跨重启） | ✅ 完成 |
 | P3+ 多额度池：多 key / key 文件 / 轮转 / 熔断隔离 / 账号生命周期 / 配额账本 / 运维 CLI | ✅ 完成（等真实多账号联调） |
-| P4 真实调用闸门（开关 + 授权 + 免费证据三条件）+ 环境变量装配（`--real`） | ✅ 默认关闭；D2 选定智谱，等填入 key 联调 |
-| 真实供应商装配与验收脚本（`--real` / `real_probe.py` / `real_smoke.py` / 证据快照，默认关闭） | ✅ 等填入智谱 key |
-| 真实模型联调 | ⛔ 等填入 key（D2 已选定智谱） |
+| P4 真实调用闸门（开关 + 授权 + 免费证据三条件）+ 环境变量装配（`--real`） | ✅ 默认关闭；已用智谱 glm-4.7-flash 实测通过（2026-11-19） |
+| 真实供应商装配与验收脚本（`--real` / `real_probe.py` / `real_smoke.py` / 证据快照，默认关闭） | ✅ 已用智谱 glm-4.7-flash 验证 |
+| 真实模型联调（智谱 glm-4.7-flash：探针 / 网关 / 真实 DSH） | ✅ 2026-11-19 验证通过 |
 | 系统凭据库 | ✅ Windows Credential Manager 已实现并验证；跨平台 keyring ⛔ |
 
 **当前验证状态（2026-11-18）**
@@ -140,6 +140,7 @@ python check_dsh_contract.py # 8 组拒绝行为矩阵，退出 0 表示符合�
 - P0–P4 内核、多额度池（多 key / key 文件 / 轮转 / 账号生命周期）、真实调用闸门、真实供应商装配与审计修复共 630 项测试通过（2 项 opt-in 用例默认跳过）
 - 用户旅程脚本（真实起服务、幂等、跨重启重放）已作为 `verify_p0` 的一部分
 - 真实供应商验收：`scripts/real_smoke.py --fixture` 与 `scripts/real_probe.py --fixture --stream --tools` 自检通过（本地假上游，无需 key、不联网）
+- **真实供应商联调（2026-11-19，智谱 `glm-4.7-flash`，key 存于 Windows 凭据管理器）**：`real_probe.py --stream --tools` → `verified: true`（非流式 / 流式 / 工具调用均通过）；`real_smoke.py` 真实模式 → `verified: true`（真实网关 + 打包 DSH headless，退出码 0、最终文本非空）。免费额度高峰期会返回 1305（可重试），探针内置退避重试后成功
 
 设计见 [docs/superpowers/specs/](docs/superpowers/specs/)，计划见 [docs/superpowers/plans/](docs/superpowers/plans/)（P0、P1、P2）。JS 通过 `node --check static/app.js`。旧 `server.py` 是冻结的 mock 参考实现；新内核通过 `tokensfree.edge.host` 或任意 ASGI 服务器提供 HTTP 服务，两者用契约测试对照。
 

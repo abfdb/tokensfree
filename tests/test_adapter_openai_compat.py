@@ -245,3 +245,23 @@ def test_penalties_are_forwarded(json_upstream):
     sent = json_upstream.requests[-1]
     assert sent["presence_penalty"] == -0.5
     assert sent["frequency_penalty"] == 1.2
+
+
+
+
+def test_reports_the_model_the_upstream_says_it_served():
+    body = json.dumps(
+        {
+            "model": "upstream-model",
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": "OK"}, "finish_reason": "stop"}],
+            "usage": {"total_tokens": 2},
+        }
+    )
+    server = JsonUpstream(body)
+    server.start()
+    try:
+        adapter = OpenAICompatAdapter(base_url(server), KEY)
+        result = asyncio.run(adapter.complete(request(), admission()))
+    finally:
+        server.stop()
+    assert result.model == "upstream-model"

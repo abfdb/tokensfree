@@ -200,9 +200,11 @@ class OpenAICompatAdapter:
                 normalized_calls = tuple(calls)
             usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
             finish_reason = choices[0].get("finish_reason") or ("tool_calls" if normalized_calls else "stop")
+            reported_model = data.get("model")
             return ChatResult(
                 content=content,
                 finish_reason=finish_reason,
+                model=reported_model if isinstance(reported_model, str) else "",
                 usage=usage,
                 tool_calls=normalized_calls,
             )
