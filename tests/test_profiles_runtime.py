@@ -231,6 +231,31 @@ def test_host_profiles_path_serves_models_and_chat(upstream, tmp_path):
         with urllib.request.urlopen(chat, timeout=30) as response:
             body = json.loads(response.read())
         assert body["choices"][0]["message"]["content"] == "local ok"
+
+        profiles_request = urllib.request.Request(
+            base + "/api/profiles", headers={"Authorization": "Bearer " + TOKEN}
+        )
+        with urllib.request.urlopen(profiles_request, timeout=15) as response:
+            profiles_body = json.loads(response.read())
+        assert profiles_body["ok"] is True and profiles_body["enabled"] is True
+        assert [item["id"] for item in profiles_body["profiles"]] == ["local-ollama"]
+
+        new_profile = json.dumps({
+            "name": "Second local",
+            "base_url": "http://127.0.0.1:11434/v1",
+            "model": "second-model",
+            "cost_policy": "zero_cost_local",
+            "capabilities": ["text"],
+        }).encode()
+        create = urllib.request.Request(
+            base + "/api/profiles",
+            data=new_profile,
+            method="POST",
+            headers={"Authorization": "Bearer " + TOKEN, "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(create, timeout=15) as response:
+            created = json.loads(response.read())
+        assert created["ok"] is True and created["restart_required"] is True
     finally:
         process.terminate()
         try:

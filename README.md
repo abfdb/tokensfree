@@ -78,7 +78,7 @@ $env:TOKENSFREE_LOCAL_TOKEN = "<32–128 位 [A-Za-z0-9_-] 的稳定令牌>"
 .venv\Scripts\python -m tokensfree.edge.host --port 8766
 ```
 
-**自定义接入通道**：桌面面板"接入通道"页或 `providers.json` 可添加任意 OpenAI 兼容 endpoint（本机 Ollama / LM Studio / vLLM、远端 HTTPS），按 `free_verified` / `zero_cost_local` / `user_paid`（显式开关）策略安全接入；密钥只存 Windows 凭据管理器。
+**自定义接入通道**：桌面面板"接入通道"页、网页控制台"接入通道"卡片（需 `--profiles` 启动）或 `providers.json` 可添加任意 OpenAI 兼容 endpoint（本机 Ollama / LM Studio / vLLM、远端 HTTPS），按 `free_verified` / `zero_cost_local` / `user_paid`（显式开关）策略安全接入；密钥只存 Windows 凭据管理器。
 
 Windows 用户还可以用**桌面外壳**：`python -m tokensfree.desktop`（tkinter 控制面板 + 托盘 + 开机启动，安装用 `install\install.ps1`）。
 

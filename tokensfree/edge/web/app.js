@@ -274,6 +274,7 @@
       select.insertBefore(auto, select.firstChild);
       select.value = 'tokensfree-auto';
       await loadStatus();
+      await loadProfiles();
       refreshTimer = setInterval(function () {
         if (!document.hidden) loadStatus();
       }, 10000);
@@ -282,6 +283,164 @@
     }
   }
 
+  var profiles = [];
+  var editingProfileId = null;
+
+  function value(id) { return byId(id).value; }
+  function checked(id) { return byId(id).checked; }
+
+  function makeMiniButton(label, handler) {
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "ghost mini";
+    button.textContent = label;
+    button.addEventListener("click", function (event) {
+      event.stopPropagation();
+      handler();
+    });
+    return button;
+  }
+
+  function renderProfileRow(profile) {
+    var row = document.createElement("div");
+    row.className = "item";
+    var left = document.createElement("div");
+    var name = document.createElement("div");
+    name.className = "name";
+    name.textContent = profile.name + (profile.enabled ? "" : "（已停用）");
+    var meta = document.createElement("div");
+    meta.className = "dim";
+    meta.textContent = [profile.base_url, profile.model, profile.cost_policy, profile.key_present ? "已存凭据" : "无凭据"].join(" · ");
+    left.appendChild(name);
+    left.appendChild(meta);
+    var actions = document.createElement("div");
+    actions.className = "actions";
+    actions.appendChild(makeMiniButton("编辑", function () { showProfileForm(profile); }));
+    actions.appendChild(makeMiniButton("测试", function () { testProfile(profile); }));
+    actions.appendChild(makeMiniButton("删除", function () { deleteProfile(profile); }));
+    row.appendChild(left);
+    row.appendChild(actions);
+    return row;
+  }
+
+  async function loadProfiles() {
+    var hint = byId("profile-hint");
+    var list = byId("profile-list");
+    try {
+      var response = await fetch("/api/profiles", { headers: authHeaders() });
+      var body = await response.json();
+      list.textContent = "";
+      if (!body.ok || body.enabled === false) {
+        profiles = [];
+        byId("new-profile").disabled = true;
+        hint.textContent = body.ok === false
+          ? "通道管理不可用：" + (body.error || response.status)
+          : "当前网关未以 --profiles 启动；请用桌面端“接入通道”或 --profiles 启动网关后再管理。";
+        return;
+      }
+      byId("new-profile").disabled = false;
+      profiles = body.profiles || [];
+      hint.textContent = profiles.length
+        ? "保存修改后需重启网关生效。"
+        : "还没有通道。点击“新增”接入本机 Ollama / 远端 OpenAI 兼容服务。";
+      profiles.forEach(function (profile) { list.appendChild(renderProfileRow(profile)); });
+    } catch (error) {
+      showError("读取通道失败：" + (error && error.message ? error.message : error));
+    }
+  }
+
+  function showProfileForm(profile) {
+    editingProfileId = profile ? profile.id : null;
+    byId("profile-form-title").textContent = profile ? "编辑通道" : "新增通道";
+    byId("profile-form-name").value = profile ? profile.name : "";
+    byId("profile-form-url").value = profile ? profile.base_url : "http://127.0.0.1:11434/v1";
+    byId("profile-form-model").value = profile ? profile.model : "";
+    byId("profile-form-policy").value = profile ? profile.cost_policy : "zero_cost_local";
+    var caps = (profile && profile.capabilities) || ["text", "stream"];
+    byId("profile-cap-text").checked = caps.indexOf("text") !== -1;
+    byId("profile-cap-stream").checked = caps.indexOf("stream") !== -1;
+    byId("profile-cap-tools").checked = caps.indexOf("tools") !== -1;
+    var evidence = (profile && profile.evidence) || {};
+    byId("profile-form-snapshot").value = evidence.snapshot || "";
+    byId("profile-form-expires").value = evidence.expires_at || "";
+    byId("profile-form-key").value = "";
+    byId("profile-form-enabled").checked = profile ? profile.enabled : true;
+    byId("profile-form").classList.remove("hidden");
+  }
+
+  function hideProfileForm() {
+    byId("profile-form").classList.add("hidden");
+    editingProfileId = null;
+  }
+
+  async function saveProfile() {
+    var capabilities = [];
+    if (checked("profile-cap-text")) capabilities.push("text");
+    if (checked("profile-cap-stream")) capabilities.push("stream");
+    if (checked("profile-cap-tools")) capabilities.push("tools");
+    var payload = {
+      name: value("profile-form-name"),
+      base_url: value("profile-form-url"),
+      model: value("profile-form-model"),
+      cost_policy: value("profile-form-policy"),
+      capabilities: capabilities,
+      evidence_snapshot: value("profile-form-snapshot"),
+      evidence_expires_at: value("profile-form-expires"),
+      enabled: checked("profile-form-enabled"),
+      api_key: value("profile-form-key"),
+    };
+    if (editingProfileId) payload.id = editingProfileId;
+    try {
+      var response = await fetch("/api/profiles", {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(payload),
+      });
+      var body = await response.json();
+      if (!body.ok) { showError("保存失败：" + (body.error || response.status)); return; }
+      showError("");
+      hideProfileForm();
+      await loadProfiles();
+      addMessage("meta", "通道已保存；重启网关后生效");
+    } catch (error) {
+      showError("保存失败：" + (error && error.message ? error.message : error));
+    }
+  }
+
+  async function deleteProfile(profile) {
+    if (!confirm("删除通道 " + profile.name + "？同时会删除其凭据。")) return;
+    try {
+      var response = await fetch("/api/profiles/" + encodeURIComponent(profile.id), {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      var body = await response.json();
+      if (!body.ok) { showError("删除失败：" + (body.error || response.status)); return; }
+      await loadProfiles();
+    } catch (error) {
+      showError("删除失败：" + (error && error.message ? error.message : error));
+    }
+  }
+
+  async function testProfile(profile) {
+    try {
+      var response = await fetch("/api/profiles/" + encodeURIComponent(profile.id) + "/test", {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      var body = await response.json();
+      if (!body.ok) { showError("连接失败：" + (body.error || response.status)); return; }
+      showError("");
+      addMessage("meta", "通道 " + profile.name + " 可用：" + ((body.models || []).slice(0, 8).join(", ") || "(模型列表为空)") + "（" + body.latency_s + "s）");
+    } catch (error) {
+      showError("连接失败：" + (error && error.message ? error.message : error));
+    }
+  }
+
+  byId("new-profile").addEventListener("click", function () { showProfileForm(null); });
+  byId("refresh-profiles").addEventListener("click", loadProfiles);
+  byId("profile-form-save").addEventListener("click", saveProfile);
+  byId("profile-form-cancel").addEventListener("click", hideProfileForm);
   byId('chat-form').addEventListener('submit', sendMessage);
   byId('stop-btn').addEventListener('click', function () {
     if (currentController) currentController.abort();

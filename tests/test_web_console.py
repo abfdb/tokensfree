@@ -123,3 +123,13 @@ def test_console_works_over_a_real_socket(backend):
         connection.close()
     finally:
         runner.stop()
+        backend.port = 8765
+
+
+def test_console_includes_the_channel_manager(backend):
+    index = request(backend, "GET", "/").body.decode("utf-8")
+    assert 'id="profile-list"' in index
+    assert 'id="profile-form"' in index
+    script = request(backend, "GET", "/web/app.js").body.decode("utf-8")
+    assert "/api/profiles" in script
+    assert "loadProfiles" in script

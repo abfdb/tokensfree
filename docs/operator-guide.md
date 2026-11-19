@@ -152,6 +152,17 @@ $env:TOKENSFREE_ENABLE_REAL = "1"
 
 桌面面板模式选 **"profiles"**（自定义通道）即自动带上述参数启动；`/api/status` 的 providers 会显示每个通道的 `cost_policy`，`/v1/models` 合并列出所有通道模型。
 
+**网页端管理**：以 `--profiles` 启动后，网页控制台右下角"接入通道"卡片可新增/编辑/删除/测试连接（与桌面端同一份 providers.json；接口需要本地令牌）：
+
+| 接口 | 作用 |
+|---|---|
+| `GET /api/profiles` | 列出通道（含 key_present，不回显密钥） |
+| `POST /api/profiles` | 新增/更新；`api_key` 字段写入 Windows 凭据管理器 |
+| `DELETE /api/profiles/<id>` | 删除通道并清理凭据 |
+| `POST /api/profiles/<id>/test` | 调 `GET /models` 测试连通性，返回模型与延迟 |
+
+保存后需**重启网关**生效（当前运行时不会热重载通道）。未以 `--profiles` 启动时接口返回 `enabled: false`，页面会提示改用桌面端。
+
 ### 系统凭据库（Windows）
 
 ~~~powershell

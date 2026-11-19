@@ -344,6 +344,7 @@ def main():
         port=args.port or 8766,
         token=config.local_token,
         static_dir=web_dir if web_dir.is_dir() else None,
+        profiles_path=args.profiles,
     )
     host = AsgiHost(make_asgi_app(backend), port=args.port, max_body=config.max_body_bytes)
 

@@ -265,3 +265,64 @@ def test_reports_the_model_the_upstream_says_it_served():
     finally:
         server.stop()
     assert result.model == "upstream-model"
+
+
+def test_list_models_uses_get_and_returns_ids():
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    seen = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_GET(self):
+            seen["path"] = self.path
+            seen["auth"] = self.headers.get("Authorization")
+            body = json.dumps({"data": [{"id": "m1"}, {"id": "m2"}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        adapter = OpenAICompatAdapter("http://127.0.0.1:%d/v1" % server.server_port, KEY)
+        assert adapter.list_models() == ["m1", "m2"]
+        assert seen["path"] == "/v1/models"
+        assert seen["auth"] == "Bearer " + KEY
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(5)
+
+
+def test_list_models_surfaces_auth_errors():
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_GET(self):
+            self.send_response(401)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        adapter = OpenAICompatAdapter("http://127.0.0.1:%d/v1" % server.server_port, KEY)
+        with pytest.raises(NormalizedError) as caught:
+            adapter.list_models()
+        assert caught.value.code == "auth_invalid"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(5)

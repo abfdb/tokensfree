@@ -74,7 +74,8 @@ class OpenAICompatAdapter:
         self._scheme = parts.scheme
         self._host = parts.hostname
         self._port = parts.port or (443 if parts.scheme == "https" else 80)
-        self._path = (parts.path.rstrip("/") or "") + "/chat/completions"
+        self._base_path = parts.path.rstrip("/")
+        self._path = self._base_path + "/chat/completions"
         self._key = api_key
         self._timeout = float(timeout)
         if type(max_stream_s) not in (int, float) or isinstance(max_stream_s, bool) or not 0 < max_stream_s <= 300:
@@ -173,6 +174,34 @@ class OpenAICompatAdapter:
             connection.close()
             raise error
         return connection, response
+
+    def list_models(self):
+        """GET {base_path}/models (used by the profile connectivity check)."""
+        connection = None
+        try:
+            connection = self._connect()
+            connection.request("GET", self._base_path + "/models", headers=self._headers(stream=False))
+            response = connection.getresponse()
+            if response.status != 200:
+                error = classify_status(response.status, self._retry_after(response))
+                error.provider = self.name
+                raise error
+            raw = response.read(MAX_BODY_BYTES + 1)
+            if len(raw) > MAX_BODY_BYTES:
+                raise NormalizedError("invalid_response", retryable=False, provider=self.name)
+            try:
+                data = json.loads(raw.decode("utf-8"))
+            except (ValueError, UnicodeError):
+                raise NormalizedError("invalid_response", retryable=False, provider=self.name) from None
+            items = data.get("data") if isinstance(data, dict) else None
+            if not isinstance(items, list):
+                raise NormalizedError("invalid_response", retryable=False, provider=self.name)
+            return [str(item.get("id")) for item in items if isinstance(item, dict) and item.get("id")]
+        except (OSError, http.client.HTTPException):
+            raise NormalizedError("disconnected", retryable=True, provider=self.name) from None
+        finally:
+            if connection is not None:
+                connection.close()
 
     async def complete(self, request, admission):
         if not isinstance(admission, Admission):

@@ -150,3 +150,11 @@ code {
   overflow-wrap: anywhere;
 }
 .foot { padding: 10px 20px 16px; }
+
+.rightcol { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+.rightcol .status { max-height: 52vh; }
+.channels { flex: 1; min-height: 0; overflow: auto; }
+.channels .item .actions { display: flex; gap: 4px; }
+.mini { padding: 3px 8px; font-size: 12px; border-radius: 6px; }
+.form-grid { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; align-items: center; }
+.form-grid input[type="text"], .form-grid input[type="password"], .form-grid select { width: 100%; }

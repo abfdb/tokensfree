@@ -50,6 +50,7 @@
     </form>
   </section>
 
+  <div class="rightcol">
   <section class="card status">
     <div class="card-head"><h2>运行时状态</h2></div>
     <div class="status-block">
@@ -75,6 +76,57 @@
       </div>
     </div>
   </section>
+
+  <section class="card channels">
+    <div class="card-head">
+      <h2>接入通道</h2>
+      <div class="row">
+        <button id="new-profile" class="ghost" type="button">新增</button>
+        <button id="refresh-profiles" class="ghost" type="button">刷新</button>
+      </div>
+    </div>
+    <div class="status-block">
+      <p id="profile-hint" class="dim">正在加载通道…</p>
+      <div id="profile-list" class="table"></div>
+    </div>
+    <div id="profile-form" class="status-block hidden">
+      <h3 id="profile-form-title">通道表单</h3>
+      <div class="form-grid">
+        <label for="profile-form-name">名称</label>
+        <input id="profile-form-name" type="text" autocomplete="off">
+        <label for="profile-form-url">Base URL</label>
+        <input id="profile-form-url" type="text" autocomplete="off" placeholder="http://127.0.0.1:11434/v1">
+        <label for="profile-form-model">模型</label>
+        <input id="profile-form-model" type="text" autocomplete="off" placeholder="qwen2.5:7b">
+        <label for="profile-form-policy">成本策略</label>
+        <select id="profile-form-policy">
+          <option value="zero_cost_local">本地算力（零成本）</option>
+          <option value="free_verified">免费证据</option>
+          <option value="user_paid">自费通道（需显式开启）</option>
+        </select>
+        <label>能力</label>
+        <div class="row">
+          <label class="switch"><input id="profile-cap-text" type="checkbox" checked> text</label>
+          <label class="switch"><input id="profile-cap-stream" type="checkbox" checked> stream</label>
+          <label class="switch"><input id="profile-cap-tools" type="checkbox"> tools</label>
+        </div>
+        <label for="profile-form-snapshot">证据快照</label>
+        <input id="profile-form-snapshot" type="text" autocomplete="off" placeholder="免费证据 JSON（free_verified 需要）">
+        <label for="profile-form-expires">或到期时间</label>
+        <input id="profile-form-expires" type="text" autocomplete="off" placeholder="Unix 秒">
+        <label for="profile-form-key">API Key</label>
+        <input id="profile-form-key" type="password" autocomplete="new-password" placeholder="留空表示不修改（本地通道可空）">
+        <label>启用</label>
+        <label class="switch"><input id="profile-form-enabled" type="checkbox" checked> 启用该通道</label>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="profile-form-save" class="primary" type="button">保存</button>
+        <button id="profile-form-cancel" class="ghost" type="button">取消</button>
+        <span class="dim">保存后需重启网关生效</span>
+      </div>
+    </div>
+  </section>
+  </div>
 </main>
 
 <footer class="foot dim">
