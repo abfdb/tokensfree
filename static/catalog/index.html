@@ -1,7 +1,69 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>tokensfree · 免费资源助手</title><link rel="stylesheet" href="style.css"></head><body>
-<header><a class="brand" href="#">◈ tokensfree <span>RESOURCE LAB / 01</span></a><span class="private">● 本地优先 · 原型版</span></header>
-<main><section class="hero"><div><p class="eyebrow">少花一点，先做出来</p><h1>把免费资源，<br>变成你的下一次实验。</h1><p class="intro">发现可申请的 AI 额度与算力，记下使用进度。<br>不托管账号，不承诺无限免费，只帮你把条件看清楚。</p></div><aside class="hero-panel"><span>你的资源手账</span><strong id="tracked">0</strong><p>项已记录</p><div id="due">暂无临近到期记录</div><small>手动记录 · 非实时余额</small></aside></section>
-<section class="notice"><b>先看规则，再点申请。</b> 免费 API、赠金和共享 GPU 不是同一种资源，不能相加。登录在官网完成；本工具不会获得你的账号权限。</section>
-<section class="toolbar"><div><label class="search">⌕ <input id="search" type="search" placeholder="搜索平台、用途或条件" aria-label="搜索资源"></label></div><div class="actions"><button id="export">导出记录 ↗</button><label class="button">导入记录<input id="import" type="file" accept="application/json,.json" hidden></label></div></section>
-<div id="filters" role="group" aria-label="资源分类"></div><section class="listhead"><h2>资源发现 <span id="count"></span></h2><label><input id="mine" type="checkbox"> 只看已记录</label></section><p id="message" role="status" aria-live="polite"></p><div id="cards"></div><p id="empty" hidden>没有匹配资源。试试其他关键词或取消筛选。</p>
-<section class="footnote"><h3>关于这些记录</h3><p>信息快照核验于 2026-11-17，申请前仍需查看官方条款。地区可用性、实名认证、绑卡要求、商业使用与数据处理政策可能随账号和方案变化。未验证你的个人资格。</p><p>记录仅保存在当前浏览器的本地存储，不会跨设备同步。请定期导出备份。到期提示只在页面打开时计算，不发送后台通知。请不要在记录中存放密码、密钥或个人敏感信息。</p></section></main><footer>tokensfree / 一个开源探索原型 <span>先验证需求，再扩大边界。</span></footer><script src="data.js"></script><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>tokensfree · 资源目录</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="data.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#search">跳到资源搜索</a>
+  <header class="site-header wrap">
+    <div class="brand"><span aria-hidden="true">tf.</span><strong>tokensfree</strong></div>
+    <a class="back" href="/">返回控制台 <span aria-hidden="true">↗</span></a>
+  </header>
+  <main class="wrap">
+    <section class="hero" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">RESOURCE INDEX <span>01</span></p>
+        <h1 id="page-title">AI 资源目录</h1>
+        <p class="intro">找模型 API、试用额度和共享算力。先看使用条件，再去官网申请。</p>
+      </div>
+      <aside class="ledger" aria-labelledby="ledger-title">
+        <h2 id="ledger-title">我的资源手账</h2>
+        <div class="ledger-stat"><strong id="tracked">0</strong> <span>项已记录</span></div>
+        <p id="due">暂无临近到期记录</p>
+        <div class="ledger-actions" role="group" aria-label="备份记录">
+          <button type="button" id="export">导出记录</button>
+          <button type="button" id="import-trigger">导入记录</button>
+          <input id="import" type="file" accept="application/json,.json" hidden>
+        </div>
+      </aside>
+    </section>
+    <aside class="notice"><strong>目录不是实时余额。</strong> 免费 API、试用赠金、共享 GPU 和付费订阅权益不能混算。资格及计费以官方规则为准。</aside>
+    <section class="directory" aria-labelledby="directory-title">
+      <div class="listhead">
+        <h2 id="directory-title">资源发现</h2>
+        <p id="count" role="status"></p>
+      </div>
+      <div class="toolbar">
+        <label class="search">
+          <span class="visually-hidden">搜索资源</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
+          <input id="search" type="search" placeholder="搜索平台、用途或条件" autocomplete="off">
+        </label>
+        <label class="mine"><input id="mine" type="checkbox"> 只看已记录</label>
+      </div>
+      <div class="filterbar">
+        <div id="filters" class="filters" role="group" aria-label="资源分类"></div>
+        <button type="button" id="reset" class="quiet" hidden>重置筛选</button>
+      </div>
+      <p id="message" class="message" role="status"></p>
+      <div id="cards"></div>
+      <div id="empty" class="empty" hidden>
+        <h3>没有匹配的资源</h3>
+        <p>试试更短的关键词，或点「重置筛选」查看全部。</p>
+      </div>
+    </section>
+    <section class="footnote" aria-labelledby="notes-title">
+      <h2 id="notes-title">关于目录与记录</h2>
+      <p>资料快照核验于 2026-11-17。地区、实名认证、绑卡要求、商业使用和数据处理条款可能随账号和方案变化。登录和申请均在官网完成；本页不读取账号或余额。</p>
+      <p>记录仅保存在当前浏览器，不跨设备同步。到期提示只在打开页面时计算，不发送后台通知。请定期导出备份，不要在记录里存放密码、密钥或个人敏感信息。</p>
+    </section>
+  </main>
+  <footer class="site-footer wrap"><span>tokensfree / 资源目录</span><span>手动记录 · 本地保存</span></footer>
+</body>
+</html>

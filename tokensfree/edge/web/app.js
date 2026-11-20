@@ -53,14 +53,12 @@
     return null;
   }
 
-  async function streamChat(payload, bubble) {
-    var controller = new AbortController();
-    currentController = controller;
+  async function streamChat(payload, bubble, signal) {
     var response = await fetch('/v1/chat/completions', {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
-      signal: controller.signal
+      signal: signal
     });
     if (!response.ok) {
       var rawtext = await response.text();
@@ -105,6 +103,7 @@
 
   async function sendMessage(event) {
     event.preventDefault();
+    if (currentController) return;
     if (!session.token) {
       showError('尚未取得本地会话令牌，请刷新页面');
       return;
@@ -113,6 +112,10 @@
     if (!prompt) return;
     var model = byId('model-select').value || 'tokensfree-auto';
     var stream = byId('stream-toggle').checked;
+    var controller = new AbortController();
+    currentController = controller;
+    var hint = byId('transcript').querySelector('.hint');
+    if (hint) hint.remove();
     byId('prompt').value = '';
     addMessage('user', prompt);
     var bubble = addMessage('assistant', '…');
@@ -125,14 +128,15 @@
     };
     try {
       if (stream) {
-        var text = await streamChat(payload, bubble);
+        var text = await streamChat(payload, bubble, controller.signal);
         if (!text) bubble.textContent = '(空响应)';
         addMessage('meta', '流式结束 · ' + model + ' · request_id ' + '见响应头 x-request-id');
       } else {
         var response = await fetch('/v1/chat/completions', {
           method: 'POST',
           headers: authHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          signal: controller.signal
         });
         var body = await response.json().catch(function () { return {}; });
         if (!response.ok) {
@@ -150,10 +154,11 @@
         addMessage('meta', model + ' · finish_reason ' + (choice.finish_reason || '-'));
       }
     } catch (error) {
-      bubble.textContent = '(失败)';
       if (error && error.name === 'AbortError') {
-        addMessage('meta', '已停止');
+        if (bubble.textContent === '…') bubble.remove();
+        addMessage('meta', '已停止等待响应');
       } else {
+        bubble.textContent = '(失败)';
         showError(String(error && error.message ? error.message : error));
       }
     } finally {
@@ -447,7 +452,8 @@
   });
   byId('refresh-status').addEventListener('click', loadStatus);
   byId('prompt').addEventListener('keydown', function (event) {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    // Enter may confirm a Chinese input candidate, not submit the form.
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
       event.preventDefault();
       byId('chat-form').requestSubmit();
     }

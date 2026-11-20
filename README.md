@@ -42,6 +42,9 @@ TOKENSFREE_LOCAL_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(
 
 网页控制台：对话/流式、模型与通道状态、连接信息、接入通道管理（`--profiles` 启动后可用）。
 桌面面板：启停网关、打开网页控制台、模式/端口/数据库设置、运行状态与日志、接入通道页与系统托盘。
+
+资源目录与手账：运行 `python server.py --port 4173` 后打开 <http://127.0.0.1:4173/catalog/>。这是旧版原型的独立页面，不依赖供应商密钥，不查询实时余额。
+
 ## 能做什么
 
 | 能力 | 入口 |

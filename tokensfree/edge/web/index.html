@@ -3,13 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
 <title>tokensfree 控制台</title>
 <link rel="stylesheet" href="/web/style.css">
 </head>
 <body>
+<a class="skip-link" href="#workspace">跳到对话区</a>
 <header class="top">
   <div class="brand">
-    <span class="logo">tf</span>
+    <span class="logo" aria-hidden="true">tf</span>
     <div>
       <h1>tokensfree</h1>
       <p class="sub">本地免费额度路由层 · 控制台</p>
@@ -25,36 +27,40 @@
 
 <div id="error-banner" class="error hidden" role="alert"></div>
 
-<main class="grid">
+<main id="workspace" class="grid" tabindex="-1">
   <section class="card chat">
     <div class="card-head">
-      <h2>对话</h2>
+      <div><p class="section-kicker">01 / PLAYGROUND</p><h2>网关对话</h2></div>
       <div class="row">
         <label class="dim" for="model-select">模型</label>
         <select id="model-select"></select>
         <label class="switch"><input id="stream-toggle" type="checkbox" checked> 流式</label>
       </div>
     </div>
-    <div id="transcript" class="transcript" aria-live="polite">
+    <div id="transcript" class="transcript" role="log" aria-label="对话记录" tabindex="0">
       <div class="hint">
-        这是本地网关，请求会按准入策略路由到 mock 或真实 provider。
-        真实调用需要三项条件全部满足（开关 / 授权 / 未过期的免费证据）。
+        <strong>从一条消息开始</strong>
+        <p>默认使用模拟模型。真实调用仍由网关按授权和成本策略决定。</p>
       </div>
     </div>
     <form id="chat-form" class="composer">
-      <textarea id="prompt" rows="3" placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
-      <div class="row">
-        <button id="send-btn" class="primary" type="submit">发送</button>
-        <button id="stop-btn" class="ghost" type="button" disabled>停止</button>
+      <label class="sr-only" for="prompt">消息内容</label>
+      <textarea id="prompt" rows="3" placeholder="输入一条消息…" aria-describedby="composer-guide"></textarea>
+      <div class="composer-bar">
+        <span id="composer-guide" class="dim">Enter 发送 · Shift+Enter 换行</span>
+        <div class="row">
+          <button id="send-btn" class="primary" type="submit">发送</button>
+          <button id="stop-btn" class="ghost" type="button" disabled>停止</button>
+        </div>
       </div>
     </form>
   </section>
 
   <div class="rightcol">
   <section class="card status">
-    <div class="card-head"><h2>运行时状态</h2></div>
+    <div class="card-head"><div><p class="section-kicker">02 / STATUS</p><h2>运行时状态</h2></div></div>
     <div class="status-block">
-      <h3>Providers</h3>
+      <h3>供应商</h3>
       <div id="status-providers" class="table"></div>
     </div>
     <div class="status-block">
@@ -79,7 +85,7 @@
 
   <section class="card channels">
     <div class="card-head">
-      <h2>接入通道</h2>
+      <div><p class="section-kicker">03 / CHANNELS</p><h2>接入通道</h2></div>
       <div class="row">
         <button id="new-profile" class="ghost" type="button">新增</button>
         <button id="refresh-profiles" class="ghost" type="button">刷新</button>
@@ -119,7 +125,7 @@
         <label>启用</label>
         <label class="switch"><input id="profile-form-enabled" type="checkbox" checked> 启用该通道</label>
       </div>
-      <div class="row" style="margin-top:8px">
+      <div class="row form-actions">
         <button id="profile-form-save" class="primary" type="button">保存</button>
         <button id="profile-form-cancel" class="ghost" type="button">取消</button>
         <span class="dim">保存后需重启网关生效</span>
