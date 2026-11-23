@@ -29,39 +29,32 @@ function Resolve-Pythonw {
   throw 'pythonw.exe not found. Create the venv first: python -m venv .venv'
 }
 
-function New-Shortcut {
-  param([string]$Path, [string]$Target, [string]$Arguments, [string]$WorkingDirectory)
-  $shell = New-Object -ComObject WScript.Shell
-  $link = $shell.CreateShortcut($Path)
-  $link.TargetPath = $Target
-  $link.Arguments = $Arguments
-  $link.WorkingDirectory = $WorkingDirectory
-  $link.Description = 'tokensfree local gateway console'
-  $link.Save()
-}
-
 $resolvedRepo = (Resolve-Path -LiteralPath $RepoRoot).Path
 if (-not (Test-Path -LiteralPath (Join-Path $resolvedRepo 'tokensfree'))) {
   throw "RepoRoot does not look like the tokensfree repository: $resolvedRepo"
 }
 $pythonw = Resolve-Pythonw -Root $resolvedRepo
 $arguments = '-m tokensfree.desktop --start-gateway'
+# WScript.Shell's Save can lose Unicode characters on nonmatching code pages.
+if (-not ('TokensfreeInstaller.ShellShortcut' -as [type])) {
+  Add-Type -Path (Join-Path $PSScriptRoot 'ShellShortcut.cs')
+}
 
 New-Item -ItemType Directory -Force -Path $StartMenuDir | Out-Null
 $startMenuShortcut = Join-Path $StartMenuDir 'tokensfree 控制台.lnk'
-New-Shortcut -Path $startMenuShortcut -Target $pythonw -Arguments $arguments -WorkingDirectory $resolvedRepo
+[TokensfreeInstaller.ShellShortcut]::Save($startMenuShortcut, $pythonw, $arguments, $resolvedRepo)
 Write-Host "start menu: $startMenuShortcut"
 
 if (-not $NoDesktopShortcut) {
   $desktopShortcut = Join-Path $DesktopDir 'tokensfree 控制台.lnk'
-  New-Shortcut -Path $desktopShortcut -Target $pythonw -Arguments $arguments -WorkingDirectory $resolvedRepo
+  [TokensfreeInstaller.ShellShortcut]::Save($desktopShortcut, $pythonw, $arguments, $resolvedRepo)
   Write-Host "desktop: $desktopShortcut"
 }
 
 if ($Autostart) {
   New-Item -ItemType Directory -Force -Path $StartupDir | Out-Null
   $startupShortcut = Join-Path $StartupDir 'tokensfree 控制台.lnk'
-  New-Shortcut -Path $startupShortcut -Target $pythonw -Arguments $arguments -WorkingDirectory $resolvedRepo
+  [TokensfreeInstaller.ShellShortcut]::Save($startupShortcut, $pythonw, $arguments, $resolvedRepo)
   Write-Host "autostart: $startupShortcut"
 }
 

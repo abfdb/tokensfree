@@ -8,6 +8,9 @@ for TOKENSFREE_REAL_EVIDENCE_EXPIRES_AT.
   python scripts/evidence_snapshot.py --provider zhipu --model glm-4.7-flash
   python scripts/evidence_snapshot.py --file local-pricing.md   # offline / tests
 
+Stdout JSON uses ASCII escapes for compatibility with redirected Windows output;
+snapshot files remain UTF-8 with readable Unicode. Parsed JSON values are identical.
+
 Exit codes: 0 = evidence recorded, 2 = fetch/read failed, 3 = evidence no longer free.
 """
 import argparse
@@ -82,19 +85,19 @@ def main():
     try:
         text = read_content(args.file, args.url)
     except Exception as error:  # network, file, permission
-        print(json.dumps({"verified": False, "reason": "fetch_failed", "error": str(error)}, ensure_ascii=False))
+        print(json.dumps({"verified": False, "reason": "fetch_failed", "error": str(error)}, ensure_ascii=True))
         return 2
 
     rows = model_rows(text, args.model)
     if not rows:
-        print(json.dumps({"verified": False, "reason": "model_not_found", "model": args.model}, ensure_ascii=False))
+        print(json.dumps({"verified": False, "reason": "model_not_found", "model": args.model}, ensure_ascii=True))
         return 3
     free_rows = [cells for cells in rows if row_is_free(cells)]
     if not free_rows:
         print(
             json.dumps(
                 {"verified": False, "reason": "model_not_marked_free", "rows": [" | ".join(cells) for cells in rows]},
-                ensure_ascii=False,
+                ensure_ascii=True,
             )
         )
         return 3
@@ -136,7 +139,7 @@ def main():
         "free_rows": [" | ".join(cells) for cells in free_rows],
         "note": "pricing evidence only; keep the snapshot outside git and refresh before expiry",
     }
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    print(json.dumps(summary, ensure_ascii=True, indent=2))
     return 0
 
 

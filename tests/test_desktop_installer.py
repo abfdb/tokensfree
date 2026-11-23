@@ -1,5 +1,6 @@
 """Installer/uninstaller scripts: create and remove user-level shortcuts (temp dirs only)."""
 import shutil
+import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -90,6 +91,56 @@ def test_install_without_autostart_skips_the_startup_shortcut(dirs):
     assert (dirs["start_menu"] / "tokensfree 控制台.lnk").exists()
     assert not (dirs["desktop"] / "tokensfree 控制台.lnk").exists()
     assert not (dirs["startup"] / "tokensfree 控制台.lnk").exists()
+
+
+def test_install_preserves_unicode_shortcut_directory_and_working_directory(tmp_path):
+    repo = tmp_path / "测试项目"
+    (repo / "tokensfree").mkdir(parents=True)
+    pythonw = repo / ".venv" / "Scripts" / "pythonw.exe"
+    pythonw.parent.mkdir(parents=True)
+    shutil.copyfile(sys.executable, pythonw)
+    start_menu = tmp_path / "快捷入口"
+    args = [
+        "-StartMenuDir", str(start_menu),
+        "-DesktopDir", str(tmp_path / "desktop"),
+        "-StartupDir", str(tmp_path / "startup"),
+        "-DataDir", str(tmp_path / "data"),
+    ]
+    shortcut = start_menu / "tokensfree 控制台.lnk"
+
+    # Re-running the installer should replace, not multiply, its shortcut.
+    for _ in range(2):
+        result = run_script("install.ps1", "-RepoRoot", str(repo), "-NoDesktopShortcut", *args)
+        assert result.returncode == 0, result.stdout + result.stderr
+    assert list(start_menu.iterdir()) == [shortcut]
+
+    # Parse the MS-SHLLINK StringData fields without using the ANSI WScript reader.
+    data = shortcut.read_bytes()
+    header_size, = struct.unpack_from("<I", data)
+    assert header_size == 0x4C
+    flags, = struct.unpack_from("<I", data, 0x14)
+    assert flags & 0x80  # IsUnicode
+    offset = header_size
+    if flags & 1:  # HasLinkTargetIDList
+        size, = struct.unpack_from("<H", data, offset)
+        offset += 2 + size
+    if flags & 2:  # HasLinkInfo
+        size, = struct.unpack_from("<I", data, offset)
+        offset += size
+    strings = {}
+    for bit in range(2, 7):
+        if flags & (1 << bit):
+            length, = struct.unpack_from("<H", data, offset)
+            offset += 2
+            end = offset + 2 * length
+            strings[bit] = data[offset:end].decode("utf-16-le")
+            offset = end
+    assert Path(strings[4]) == repo
+    assert strings[5] == "-m tokensfree.desktop --start-gateway"
+
+    uninstall = run_script("uninstall.ps1", *args)
+    assert uninstall.returncode == 0, uninstall.stdout + uninstall.stderr
+    assert not shortcut.exists()
 
 
 def test_uninstall_remove_data_and_is_idempotent(dirs):
