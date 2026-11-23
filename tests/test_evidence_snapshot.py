@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 HEADER = "| 模型名称 | 上下文 | 输入单价 | 输出单价 | 缓存存储 | 缓存命中 |\n"
 FREE_ROW = "> | GLM-4.7-Flash | 200K | 免费 | 免费 | 限时免费 | 免费 |\n"
@@ -81,3 +83,38 @@ def test_invalid_ttl_is_rejected(tmp_path):
     result = run_snapshot("--file", str(source), "--out-dir", str(tmp_path / "evidence"), "--ttl-days", "0")
     assert result.returncode == 2
     assert payload_of(result)["reason"] == "invalid_ttl_days"
+
+
+@pytest.mark.parametrize("case, expected_code, reason", [
+    ("free", 0, None),
+    ("paid", 3, "model_not_marked_free"),
+    ("unknown", 3, "model_not_found"),
+    ("missing", 2, "fetch_failed"),
+])
+def test_stdout_json_preserves_unicode_with_cp1252_default(tmp_path, case, expected_code, reason):
+    source = tmp_path / "价格.md"
+    if case != "missing":
+        source.write_text(HEADER + (PAID_ROW if case == "paid" else FREE_ROW), encoding="utf-8")
+    model = {"paid": "glm-4.7-flashx", "unknown": "未知模型"}.get(case, "glm-4.7-flash")
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "evidence_snapshot.py"),
+         "--file", str(source), "--out-dir", str(tmp_path / "证据"), "--model", model],
+        cwd=str(ROOT), capture_output=True, timeout=120,
+        env={**os.environ, "PYTHONIOENCODING": "cp1252:strict", "PYTHONUTF8": "0"},
+    )
+    assert result.returncode == expected_code, result.stderr.decode("utf-8", errors="replace")
+    # ASCII JSON is valid UTF-8 and must round-trip without lossy replacement.
+    payload = json.loads(result.stdout.decode("ascii"))
+    if case == "free":
+        assert "免费" in payload["free_rows"][0]
+        assert payload["source"] == str(source)
+        snapshot = json.loads(Path(payload["snapshot_path"]).read_text(encoding="utf-8"))
+        assert snapshot["free_rows"] == payload["free_rows"]
+    else:
+        assert payload["reason"] == reason
+        if case == "paid":
+            assert "限时免费" in payload["rows"][0]
+        elif case == "unknown":
+            assert payload["model"] == model
+        else:
+            assert "价格.md" in payload["error"]
