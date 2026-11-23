@@ -3,7 +3,10 @@
 Pure function: filters by authorization and capability, preserves configuration order.
 It deliberately does not decide free status, health or cooldowns - that is admission's job.
 """
+from dataclasses import replace
+
 from providers import ProviderSpec
+from tokensfree.adapters.base import ChatRequest
 
 
 def build_candidates(specs, *, allowed, required=frozenset({"text"})):
@@ -37,3 +40,10 @@ def specs_for_model(specs, requested):
     if requested == AUTO_MODEL:
         return tuple(specs)
     return tuple(spec for spec in specs if spec.model == requested)
+
+
+def bind_auto_model(request, spec):
+    """Bind the internal selector to the admitted candidate for this attempt."""
+    if isinstance(request, ChatRequest) and request.model == AUTO_MODEL:
+        return replace(request, model=spec.model)
+    return request

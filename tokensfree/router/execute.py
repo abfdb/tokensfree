@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from tokensfree.adapters.base import NormalizedError
 from tokensfree.router.admission import AdmissionDenied
+from tokensfree.router.candidates import bind_auto_model
 
 # Errors that say "this account cannot serve right now" but leave other candidates usable.
 ACCOUNT_SCOPED_ERRORS = frozenset({"auth_invalid", "quota_exhausted", "rate_limited"})
@@ -60,7 +61,8 @@ async def execute(candidates, *, admit, request, max_attempts=2, first_byte_sent
             trace.append((candidate.spec.name, "denied:" + denied.reason))
             continue
         try:
-            result = await candidate.adapter.complete(request, admission)
+            upstream_request = bind_auto_model(request, candidate.spec)
+            result = await candidate.adapter.complete(upstream_request, admission)
         except NormalizedError as error:
             if breaker is not None:
                 breaker.record_failure(clock())

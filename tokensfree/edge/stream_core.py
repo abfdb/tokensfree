@@ -12,7 +12,7 @@ from tokensfree.adapters.base import NormalizedError
 from tokensfree.edge.protocol import RequestRejected, build_error, parse_chat_payload
 from tokensfree.errors import ErrorCode
 from tokensfree.router.admission import AdmissionDenied
-from tokensfree.router.candidates import build_candidates, specs_for_model
+from tokensfree.router.candidates import bind_auto_model, build_candidates, specs_for_model
 from tokensfree.router.execute import ACCOUNT_SCOPED_ERRORS, NoProviderAvailable
 from tokensfree.sse import SseEncoder
 
@@ -101,7 +101,8 @@ async def iter_frames(plan, *, admit, max_attempts=2, breaker_for=None, clock=ti
         first = True
         finish_emitted = False
         try:
-            async for event in adapter.stream(plan.parsed.request, admission):
+            upstream_request = bind_auto_model(plan.parsed.request, spec)
+            async for event in adapter.stream(upstream_request, admission):
                 if event.usage is not None:
                     usage = event.usage
                 if event.kind == "delta":
